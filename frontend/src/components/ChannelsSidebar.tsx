@@ -218,7 +218,16 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
             return (
             <div key={channel.id}>
               <button
-                onClick={() => { onSelectChannel(channel.id, 'VOICE', channel.name); if (useVoiceStore.getState().currentChannelId !== channel.id) { useVoiceStore.getState().joinVoice(channel.id) } }}
+                onClick={() => {
+                  const vs = useVoiceStore.getState()
+                  if (vs.currentChannelId === channel.id) {
+                    // Already in this voice channel — switch view to it
+                    onSelectChannel(channel.id, 'VOICE', channel.name)
+                  } else {
+                    // Join voice but keep current text view
+                    vs.joinVoice(channel.id)
+                  }
+                }}
                 onContextMenu={e => handleContextMenu(e, channel)}
                 className={clsx('channel-item group', selectedChannelId === channel.id && 'active')}>
                 <SpeakerWaveIcon className="w-5 h-5 mr-2" /><span className="truncate">{channel.name}</span>
@@ -242,7 +251,15 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
                     </div>
                     <span className={clsx('truncate', isUserSpeaking && 'text-green-400')}>{vu.displayName}</span>
                     {vu.isScreenSharing && (
-                      <button onClick={(e) => { e.stopPropagation(); useVoiceStore.getState().setWatchingUser(vu.id) }}
+                      <button onClick={(e) => { 
+                        e.stopPropagation()
+                        const vs = useVoiceStore.getState()
+                        if (vs.currentChannelId !== channel.id) {
+                          vs.joinVoice(channel.id)
+                        }
+                        onSelectChannel(channel.id, 'VOICE', channel.name)
+                        setTimeout(() => useVoiceStore.getState().setWatchingUser(vu.id), 300)
+                      }}
                         className="text-[9px] font-bold text-green-400 bg-green-400/10 px-1 rounded hover:bg-green-400/20">
                         LIVE
                       </button>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { HashtagIcon, SpeakerWaveIcon, PlusIcon, XMarkIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
-import { MicrophoneIcon as MicSolid, SpeakerXMarkIcon as SpeakerSolid, PhoneXMarkIcon } from '@heroicons/react/24/solid'
+import { MicrophoneIcon as MicSolid, SpeakerXMarkIcon as SpeakerSolid, PhoneXMarkIcon, ComputerDesktopIcon } from '@heroicons/react/24/solid'
 import { clsx } from 'clsx'
 import client from '../api/client'
 import { useAuthStore } from '../stores/authStore'
@@ -48,7 +48,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
   const contextRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const { user, logout } = useAuthStore()
-  const { currentChannelId, connectedUsers, isSpeaking, speakingUsers, isMuted, isDeafened, pingMs, connectionQuality, userVolumes } = useVoiceStore()
+  const { currentChannelId, connectedUsers, isSpeaking, speakingUsers, isMuted, isDeafened, isScreenSharing, pingMs, connectionQuality, userVolumes } = useVoiceStore()
 
   useEffect(() => {
     if (serverId) fetchChannels()
@@ -207,9 +207,13 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
           </div>
           {channels.filter(c => c.type === 'VOICE').map(channel => {
             const fetchedUsers = voiceUsers[channel.id] || []
-            const channelVoiceUsers = currentChannelId === channel.id && user && !fetchedUsers.some(u => u.id === user.id)
-              ? [...fetchedUsers, { id: user.id, displayName: user.displayName, avatar: user.avatar }]
-              : fetchedUsers
+            const mergedUsers = fetchedUsers.map(vu => {
+              const storeUser = connectedUsers.find(u => u.id === vu.id)
+              return { ...vu, isMuted: storeUser?.isMuted, isDeafened: storeUser?.isDeafened, isScreenSharing: storeUser?.isScreenSharing }
+            })
+            const channelVoiceUsers = currentChannelId === channel.id && user && !mergedUsers.some(u => u.id === user.id)
+              ? [...mergedUsers, { id: user.id, displayName: user.displayName, avatar: user.avatar, isMuted, isDeafened, isScreenSharing }]
+              : mergedUsers.map(vu => vu.id === user?.id ? { ...vu, isMuted, isDeafened, isScreenSharing } : vu)
             return (
             <div key={channel.id}>
               <button
@@ -252,7 +256,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
       {currentChannelId && (
         <div className="px-3 py-2 border-t border-dark-100 bg-dark-300/80">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="relative group/stats">
               <div className="flex items-center gap-1.5">
                 <div className={clsx('w-2 h-2 rounded-full', connectionQuality === 'good' ? 'bg-green-500' : connectionQuality === 'medium' ? 'bg-yellow-500' : 'bg-red-500')} />
                 <span className={clsx('text-xs font-semibold', connectionQuality === 'good' ? 'text-green-400' : connectionQuality === 'medium' ? 'text-yellow-400' : 'text-red-400')}>
@@ -260,7 +264,16 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
                 </span>
               </div>
               <div className="text-[10px] text-gray-500 mt-0.5">
-                {pingMs != null ? `${pingMs}ms` : '...'} • {currentVoiceChannelName}
+                {pingMs != null ? `${pingMs}ms` : '—'} • {currentVoiceChannelName}
+              </div>
+              {/* Hover tooltip */}
+              <div className="absolute bottom-full left-0 mb-2 hidden group-hover/stats:block bg-dark-100 rounded-lg p-3 shadow-xl border border-dark-100 w-48 z-50">
+                <div className="text-xs font-semibold text-white mb-2">Connection Info</div>
+                <div className="space-y-1 text-[11px]">
+                  <div className="flex justify-between"><span className="text-gray-400">Ping</span><span className="text-white">{pingMs != null ? `${pingMs}ms` : 'N/A'}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-400">Quality</span><span className={clsx(connectionQuality === 'good' ? 'text-green-400' : connectionQuality === 'medium' ? 'text-yellow-400' : 'text-red-400')}>{connectionQuality === 'good' ? 'Good' : connectionQuality === 'medium' ? 'Medium' : 'Poor'}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-400">Protocol</span><span className="text-white">WebRTC</span></div>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -269,6 +282,9 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
               </button>
               <button onClick={() => useVoiceStore.getState().toggleDeafen()} className={clsx('p-1 rounded', isDeafened ? 'text-red-400' : 'text-gray-400 hover:text-white')}>
                 <SpeakerSolid className="w-4 h-4" />
+              </button>
+              <button onClick={() => useVoiceStore.getState().toggleScreenShare()} className={clsx('p-1 rounded', isScreenSharing ? 'text-green-400' : 'text-gray-400 hover:text-white')}>
+                <ComputerDesktopIcon className="w-4 h-4" />
               </button>
               <button onClick={() => useVoiceStore.getState().leaveVoice()} className="p-1 rounded text-gray-400 hover:text-red-400">
                 <PhoneXMarkIcon className="w-4 h-4" />

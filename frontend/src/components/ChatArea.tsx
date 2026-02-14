@@ -349,7 +349,7 @@ interface MessageItemProps {
   serverEmojis: Emoji[]
   isOwn: boolean
   currentUsername?: string
-  channelMembers?: { id: string; user: { username: string } }[]
+  channelMembers?: { id: string; user: { id: string; username: string; displayName: string; avatar?: string } }[]
   onEdit: (content: string) => void
   onDelete: () => void
 }
@@ -358,6 +358,16 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [mentionProfile, setMentionProfile] = useState<{ username: string; x: number; y: number } | null>(null)
+  const mentionProfileRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (mentionProfileRef.current && !mentionProfileRef.current.contains(e.target as Node)) setMentionProfile(null)
+    }
+    if (mentionProfile) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [mentionProfile])
   const isImage = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(message.content)
   const isFileUrl = /^https?:\/\//.test(message.content) || message.content.startsWith('/uploads/')
 
@@ -384,8 +394,11 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
       if (part.startsWith('@')) {
         const username = part.slice(1)
         const isSelf = username === currentUsername
-        return <span key={`${keyPrefix}-m${i}`} className={clsx('px-1 rounded font-medium',
-          isSelf ? 'bg-yellow-500/30 text-yellow-300' : 'bg-primary-500/30 text-primary-300 hover:underline cursor-pointer')}>
+        return <span key={`${keyPrefix}-m${i}`} onClick={(e) => {
+          e.stopPropagation()
+          setMentionProfile({ username, x: e.clientX, y: e.clientY })
+        }} className={clsx('px-1 rounded font-medium cursor-pointer',
+          isSelf ? 'bg-yellow-500/30 text-yellow-300' : 'bg-primary-500/30 text-primary-300 hover:underline')}>
           {part}
         </span>
       }
@@ -429,6 +442,26 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
           <button onClick={() => setShowDeleteConfirm(false)} className="text-xs text-gray-400 hover:text-white">No</button>
         </div>
       )}
+
+      {/* Mention profile popover */}
+      {mentionProfile && (() => {
+        const member = channelMembers.find(m => m.user.username === mentionProfile.username)
+        return (
+          <div ref={mentionProfileRef} className="fixed z-50 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 p-4 w-56 animate-scaleIn"
+            style={{ left: mentionProfile.x, top: mentionProfile.y - 10, transform: 'translateY(-100%)' }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
+                {member?.user.avatar ? <img src={member.user.avatar} className="w-full h-full object-cover" /> : (member?.user.displayName || mentionProfile.username).charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-white truncate">{member?.user.displayName || mentionProfile.username}</div>
+                <div className="text-xs text-gray-400 truncate">@{mentionProfile.username}</div>
+              </div>
+            </div>
+            {!member && <div className="text-xs text-gray-500">User not in this channel</div>}
+          </div>
+        )
+      })()}
 
       <div className="flex items-start space-x-3">
         <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">

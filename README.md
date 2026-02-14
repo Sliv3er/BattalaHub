@@ -9,17 +9,6 @@ A production-grade Discord alternative featuring real-time chat, voice channels 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![WebRTC](https://img.shields.io/badge/WebRTC-333333?style=flat&logo=webrtc&logoColor=white)
 
-## 📸 Screenshots
-
-| Login | Chat | Voice |
-|-------|------|-------|
-| ![Login](docs/screenshots/login.png) | ![Chat](docs/screenshots/chat.png) | ![Voice](docs/screenshots/voice.png) |
-
-| Server Settings | Screen Share | Members |
-|----------------|--------------|---------|
-| ![Settings](docs/screenshots/settings.png) | ![Stream](docs/screenshots/stream.png) | ![Members](docs/screenshots/members.png) |
-
-> *Screenshots coming soon — add your own to `docs/screenshots/`*
 
 ## ✨ Features
 

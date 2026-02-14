@@ -24,11 +24,11 @@ const DashboardPage = () => {
     client.get(`/servers/${selectedServerId}`).then(r => {
       setServerOwnerId(r.data.ownerId || '')
       const myMember = r.data.members?.find((m: any) => m.user?.id === user.id || m.userId === user.id)
-      if (myMember?.roles) {
-        setMyRoles(myMember.roles)
-      } else if (r.data.ownerId === user.id) {
+      if (r.data.ownerId === user.id) {
         // Owner has all permissions implicitly
         setMyRoles([{ role: { permissions: ['ADMINISTRATOR'] } }])
+      } else if (myMember?.roles && myMember.roles.length > 0) {
+        setMyRoles(myMember.roles)
       } else {
         setMyRoles([])
       }

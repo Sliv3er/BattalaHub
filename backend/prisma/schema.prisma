@@ -1,0 +1,253 @@
+// Battala Hub Database Schema
+// This file defines the complete database structure for Battala Hub
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  username    String   @unique
+  email       String   @unique
+  displayName String?
+  avatar      String?
+  password    String
+  isOnline    Boolean  @default(false)
+  lastSeen    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  messages        Message[]
+  reactions       Reaction[]
+  attachments     Attachment[]
+  memberships     ServerMember[]
+  invites         Invite[]
+  voiceSessions   VoiceSession[]
+  typingIndicators TypingIndicator[]
+
+  @@map("users")
+}
+
+model Server {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  icon        String?
+  ownerId     String
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  channels    Channel[]
+  members     ServerMember[]
+  roles       Role[]
+  invites     Invite[]
+  emojis      Emoji[]
+
+  @@map("servers")
+}
+
+model ServerMember {
+  id       String   @id @default(uuid())
+  userId   String
+  serverId String
+  joinedAt DateTime @default(now())
+  nickname String?
+
+  // Relationships
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  roles  MemberRole[]
+
+  @@unique([userId, serverId])
+  @@map("server_members")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String
+  color       String   @default("#ffffff")
+  serverId    String
+  position    Int      @default(0)
+  permissions String[] // JSON array of permission strings
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Relationships
+  server  Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  members MemberRole[]
+
+  @@map("roles")
+}
+
+model MemberRole {
+  id       String @id @default(uuid())
+  memberId String
+  roleId   String
+
+  // Relationships
+  member ServerMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role   Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+  @@map("member_roles")
+}
+
+model Channel {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  type        ChannelType @default(TEXT)
+  serverId    String
+  position    Int         @default(0)
+  isPrivate   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relationships
+  server           Server            @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  voiceSessions    VoiceSession[]
+  typingIndicators TypingIndicator[]
+
+  @@map("channels")
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  content   String
+  authorId  String
+  channelId String
+  type      MessageType @default(USER)
+  editedAt  DateTime?
+  createdAt DateTime    @default(now())
+
+  // Relationships
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  reactions   Reaction[]
+  attachments Attachment[]
+
+  @@map("messages")
+}
+
+enum MessageType {
+  USER
+  SYSTEM
+  JOIN
+  LEAVE
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  emoji     String
+  userId    String
+  messageId String
+  createdAt DateTime @default(now())
+
+  // Relationships
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, messageId, emoji])
+  @@map("reactions")
+}
+
+model Attachment {
+  id        String         @id @default(uuid())
+  filename  String
+  originalName String
+  url       String
+  size      Int
+  mimeType  String
+  type      AttachmentType
+  userId    String
+  messageId String?
+  createdAt DateTime       @default(now())
+
+  // Relationships
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+enum AttachmentType {
+  IMAGE
+  FILE
+  AUDIO
+  VIDEO
+}
+
+model Invite {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  serverId  String
+  creatorId String
+  uses      Int        @default(0)
+  maxUses   Int?
+  expiresAt DateTime?
+  createdAt DateTime   @default(now())
+
+  // Relationships
+  server  Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@map("invites")
+}
+
+model VoiceSession {
+  id        String   @id @default(uuid())
+  userId    String
+  channelId String
+  isActive  Boolean  @default(true)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  // Relationships
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@map("voice_sessions")
+}
+
+model Emoji {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  serverId  String
+  creatorId String
+  createdAt DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([name, serverId])
+  @@map("emojis")
+}
+
+model TypingIndicator {
+  id        String   @id @default(uuid())
+  userId    String
+  channelId String
+  startedAt DateTime @default(now())
+
+  // Relationships
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channelId])
+  @@map("typing_indicators")
+}

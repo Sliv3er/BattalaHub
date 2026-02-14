@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-300 dark:border-gray-600;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-dark-400 text-white;
+  }
+
+  input, textarea, select {
+    @apply bg-dark-200 border-dark-100 text-white placeholder-gray-400;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    @apply border-primary-500 ring-1 ring-primary-500;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-400;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-dark-200 hover:bg-dark-100 text-white focus:ring-gray-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 hover:bg-red-700 text-white focus:ring-red-500;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 border rounded-lg focus:outline-none transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-dark-200 border border-dark-100 rounded-lg p-4 shadow-lg;
+  }
+
+  .sidebar {
+    @apply bg-dark-300 border-r border-dark-100 flex flex-col;
+  }
+
+  .channel-item {
+    @apply flex items-center px-3 py-2 mx-2 rounded-lg text-gray-300 hover:bg-dark-200 hover:text-white transition-colors duration-150 cursor-pointer;
+  }
+
+  .channel-item.active {
+    @apply bg-primary-600 text-white;
+  }
+
+  .message-item {
+    @apply hover:bg-dark-200/50 px-4 py-2 transition-colors duration-150;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #4b5563;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: #6b7280;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .animate-fadeIn {
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .animate-scaleIn {
+    animation: scaleIn 0.15s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

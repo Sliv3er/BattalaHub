@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: battala-postgres
+    environment:
+      POSTGRES_DB: battala_hub
+      POSTGRES_USER: battala
+      POSTGRES_PASSWORD: battala_secure_2024
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U battala"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MinIO S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    container_name: battala-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: battala
+      MINIO_ROOT_PASSWORD: battala_minio_2024
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Create MinIO bucket
+  createbucket:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 battala battala_minio_2024;
+      /usr/bin/mc mb myminio/battala-uploads;
+      /usr/bin/mc anonymous set public myminio/battala-uploads;
+      exit 0;
+      "
+
+  # STUN/TURN server for WebRTC
+  coturn:
+    image: coturn/coturn:latest
+    container_name: battala-coturn
+    ports:
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "49160-49200:49160-49200/udp"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf
+    command: -c /etc/coturn/turnserver.conf
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: battala-backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://battala:battala_secure_2024@postgres:5432/battala_hub
+      JWT_SECRET: battala_jwt_secret_key_2024_very_secure_random_string
+      JWT_EXPIRATION: 24h
+      CORS_ORIGIN: http://localhost:3000
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: battala
+      MINIO_SECRET_KEY: battala_minio_2024
+      MINIO_BUCKET: battala-uploads
+      MINIO_USE_SSL: false
+      MINIO_PUBLIC_URL: http://localhost:9000
+      TURN_SERVER_URL: turn:coturn:3478
+      TURN_SERVER_USERNAME: battala
+      TURN_SERVER_CREDENTIAL: battala_turn_2024
+    ports:
+      - "4000:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    # volumes removed for production deployment
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: battala-frontend
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_WS_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    # volumes removed for production deployment
+
+volumes:
+  postgres_data:
+  minio_data:

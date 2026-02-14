@@ -5,6 +5,7 @@ import ChatArea from '../components/ChatArea'
 import VoiceChannel from '../components/VoiceChannel'
 import MembersList from '../components/MembersList'
 import { useAuthStore } from '../stores/authStore'
+import { useVoiceStore } from '../stores/voiceStore'
 import client from '../api/client'
 
 const DashboardPage = () => {
@@ -15,6 +16,7 @@ const DashboardPage = () => {
   const [myRoles, setMyRoles] = useState<any[]>([])
   const [serverOwnerId, setServerOwnerId] = useState<string>('')
   const { user } = useAuthStore()
+  const voiceChannelId = useVoiceStore(s => s.currentChannelId)
 
   // Fetch current user's roles for selected server
   useEffect(() => {
@@ -52,7 +54,7 @@ const DashboardPage = () => {
         />
       </div>
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-        {selectedChannelType === 'VOICE' && selectedChannelId ? (
+        {(selectedChannelType === 'VOICE' || (voiceChannelId && voiceChannelId === selectedChannelId)) && selectedChannelId ? (
           <VoiceChannel channelId={selectedChannelId} channelName={selectedChannelName} serverId={selectedServerId ?? undefined} myRoles={myRoles} />
         ) : (
           <ChatArea channelId={selectedChannelId} serverId={selectedServerId} />

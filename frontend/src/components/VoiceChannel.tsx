@@ -5,6 +5,7 @@ import {
   PhoneXMarkIcon,
   ComputerDesktopIcon,
   SignalIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/solid'
 import { MicrophoneIcon as MicOff } from '@heroicons/react/24/outline'
 import { clsx } from 'clsx'
@@ -25,6 +26,7 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
     currentChannelId, connectedUsers, isMuted, isDeafened, isScreenSharing,
     pingMs, connectionQuality, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreenShare,
     screenStream, userVolumes, setUserVolume, isSpeaking, speakingUsers, setStreamQuality, streamQuality,
+    remoteStreams, watchingUserId, setWatchingUser,
   } = useVoiceStore()
 
   const [showQualityPicker, setShowQualityPicker] = useState(false)
@@ -112,7 +114,12 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
                     ) : user.displayName.charAt(0).toUpperCase()}
                   </div>
                   <span className={clsx('font-medium flex-1', isUserSpeaking ? 'text-green-400' : 'text-white')}>{user.displayName}</span>
-                  {user.isScreenSharing && <span className="text-[10px] font-bold text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">LIVE</span>}
+                  {user.isScreenSharing && (
+                    <button onClick={(e) => { e.stopPropagation(); setWatchingUser(user.id) }}
+                      className="text-[10px] font-bold text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded hover:bg-green-400/20">
+                      LIVE
+                    </button>
+                  )}
                   {user.isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                   {user.isDeafened && <SpeakerXMarkIcon className="w-4 h-4 text-red-400" />}
                 </div>
@@ -151,6 +158,17 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
           </div>
         )}
       </div>
+
+      {/* Remote Stream Viewer */}
+      {isConnected && watchingUserId && remoteStreams.get(watchingUserId) && (
+        <div className="mx-6 mb-4 relative bg-black rounded-xl overflow-hidden border border-dark-100">
+          <div className="flex items-center justify-between px-3 py-1 bg-dark-300/80">
+            <span className="text-xs text-green-400">Watching {connectedUsers.find(u => u.id === watchingUserId)?.displayName}'s stream</span>
+            <button onClick={() => setWatchingUser(null)} className="text-gray-400 hover:text-white"><XMarkIcon className="w-4 h-4" /></button>
+          </div>
+          <video ref={el => { if (el) { el.srcObject = remoteStreams.get(watchingUserId)!; el.play().catch(() => {}) }}} autoPlay className="w-full max-h-96 object-contain" />
+        </div>
+      )}
 
       {/* Screen Share Preview */}
       {isConnected && isScreenSharing && screenStream && screenStream.getVideoTracks().length > 0 && (

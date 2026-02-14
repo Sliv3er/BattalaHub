@@ -31,7 +31,10 @@ interface VoiceState {
   streamQuality: { fps: number; height: number }
   isSpeaking: boolean
   speakingUsers: Set<string>
+  remoteStreams: Map<string, MediaStream>
+  watchingUserId: string | null
   setStreamQuality: (fps: number, height: number) => void
+  setWatchingUser: (userId: string | null) => void
   initVoiceSocket: () => void
   joinVoice: (channelId: string) => Promise<void>
   leaveVoice: () => void
@@ -95,6 +98,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   streamQuality: { fps: 30, height: 720 },
   isSpeaking: false,
   speakingUsers: new Set<string>(),
+  remoteStreams: new Map<string, MediaStream>(),
+  watchingUserId: null,
+
+  setWatchingUser: (userId: string | null) => set({ watchingUserId: userId }),
 
   setStreamQuality: (fps: number, height: number) => {
     set({ streamQuality: { fps, height } })
@@ -212,6 +219,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
 
   joinVoice: async (channelId: string) => {
     const state = get()
+    if (state.currentChannelId === channelId) return  // Already in this channel
     if (state.currentChannelId) state.leaveVoice()
 
     state.initVoiceSocket()
@@ -293,6 +301,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       isDeafened: false,
       isScreenSharing: false,
       pingMs: null,
+      remoteStreams: new Map(),
+      watchingUserId: null,
     })
   },
 
@@ -376,20 +386,26 @@ function createPeerConnection(userId: string, initiator: boolean, socket: Socket
   }
 
   pc.ontrack = (e) => {
-    try {
-      const ctx = getAudioContext()
-      const source = ctx.createMediaStreamSource(e.streams[0])
-      const gainNode = ctx.createGain()
-      const store = useVoiceStore.getState()
-      gainNode.gain.value = store.userVolumes[userId] || 1.0
-      source.connect(gainNode)
-      gainNode.connect(ctx.destination)
-      store.gainNodes.set(userId, gainNode)
-    } catch {
-      // Fallback to plain audio
-      const audio = new Audio()
-      audio.srcObject = e.streams[0]
-      audio.play().catch(() => {})
+    const store = useVoiceStore.getState()
+    if (e.track.kind === 'video') {
+      const streams = new Map(store.remoteStreams)
+      streams.set(userId, e.streams[0])
+      useVoiceStore.setState({ remoteStreams: streams })
+    }
+    if (e.track.kind === 'audio') {
+      try {
+        const ctx = getAudioContext()
+        const source = ctx.createMediaStreamSource(e.streams[0])
+        const gainNode = ctx.createGain()
+        gainNode.gain.value = store.userVolumes[userId] || 1.0
+        source.connect(gainNode)
+        gainNode.connect(ctx.destination)
+        store.gainNodes.set(userId, gainNode)
+      } catch {
+        const audio = new Audio()
+        audio.srcObject = e.streams[0]
+        audio.play().catch(() => {})
+      }
     }
   }
 

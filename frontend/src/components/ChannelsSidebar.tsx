@@ -45,6 +45,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
   const [editName, setEditName] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Channel | null>(null)
   const [sidebarVoicePopover, setSidebarVoicePopover] = useState<{ userId: string; displayName: string; x: number; y: number } | null>(null)
+  const [showStreamQuality, setShowStreamQuality] = useState(false)
   const contextRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const { user, logout } = useAuthStore()
@@ -217,7 +218,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
             return (
             <div key={channel.id}>
               <button
-                onClick={() => { onSelectChannel(channel.id, 'VOICE', channel.name); useVoiceStore.getState().joinVoice(channel.id) }}
+                onClick={() => { onSelectChannel(channel.id, 'VOICE', channel.name); if (useVoiceStore.getState().currentChannelId !== channel.id) { useVoiceStore.getState().joinVoice(channel.id) } }}
                 onContextMenu={e => handleContextMenu(e, channel)}
                 className={clsx('channel-item group', selectedChannelId === channel.id && 'active')}>
                 <SpeakerWaveIcon className="w-5 h-5 mr-2" /><span className="truncate">{channel.name}</span>
@@ -240,7 +241,12 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
                       {vu.avatar ? <img src={vu.avatar} alt="" className="w-full h-full object-cover" /> : vu.displayName?.charAt(0).toUpperCase()}
                     </div>
                     <span className={clsx('truncate', isUserSpeaking && 'text-green-400')}>{vu.displayName}</span>
-                    {vu.isScreenSharing && <span className="text-[9px] font-bold text-green-400 bg-green-400/10 px-1 rounded">LIVE</span>}
+                    {vu.isScreenSharing && (
+                      <button onClick={(e) => { e.stopPropagation(); useVoiceStore.getState().setWatchingUser(vu.id) }}
+                        className="text-[9px] font-bold text-green-400 bg-green-400/10 px-1 rounded hover:bg-green-400/20">
+                        LIVE
+                      </button>
+                    )}
                     {vu.isMuted && <MicSolid className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
                     {vu.isDeafened && <SpeakerSolid className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
                   </div>
@@ -283,9 +289,36 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
               <button onClick={() => useVoiceStore.getState().toggleDeafen()} className={clsx('p-1 rounded', isDeafened ? 'text-red-400' : 'text-gray-400 hover:text-white')}>
                 <SpeakerSolid className="w-4 h-4" />
               </button>
-              <button onClick={() => useVoiceStore.getState().toggleScreenShare()} className={clsx('p-1 rounded', isScreenSharing ? 'text-green-400' : 'text-gray-400 hover:text-white')}>
-                <ComputerDesktopIcon className="w-4 h-4" />
-              </button>
+              <div className="relative">
+                <button onClick={() => {
+                  if (isScreenSharing) {
+                    useVoiceStore.getState().toggleScreenShare()
+                  } else {
+                    setShowStreamQuality(!showStreamQuality)
+                  }
+                }} className={clsx('p-1 rounded', isScreenSharing ? 'text-green-400' : 'text-gray-400 hover:text-white')}>
+                  <ComputerDesktopIcon className="w-4 h-4" />
+                </button>
+                {showStreamQuality && (
+                  <div className="absolute bottom-full right-0 mb-2 bg-dark-100 rounded-lg shadow-xl border border-dark-100 p-2 w-44 z-50 animate-scaleIn">
+                    <div className="text-xs font-semibold text-white mb-2">Stream Quality</div>
+                    {[
+                      { label: '720p 15fps', fps: 15, height: 720 },
+                      { label: '720p 30fps', fps: 30, height: 720 },
+                      { label: '1080p 30fps', fps: 30, height: 1080 },
+                      { label: '1080p 60fps', fps: 60, height: 1080 },
+                    ].map(opt => (
+                      <button key={opt.label} onClick={() => {
+                        useVoiceStore.getState().setStreamQuality(opt.fps, opt.height)
+                        useVoiceStore.getState().toggleScreenShare()
+                        setShowStreamQuality(false)
+                      }} className="w-full text-left px-2 py-1.5 text-xs text-gray-300 hover:bg-dark-200 hover:text-white rounded transition-colors">
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button onClick={() => useVoiceStore.getState().leaveVoice()} className="p-1 rounded text-gray-400 hover:text-red-400">
                 <PhoneXMarkIcon className="w-4 h-4" />
               </button>

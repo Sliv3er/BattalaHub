@@ -47,7 +47,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
   const [deleteConfirm, setDeleteConfirm] = useState<Channel | null>(null)
   const contextRef = useRef<HTMLDivElement>(null)
   const { user, logout } = useAuthStore()
-  const { currentChannelId, connectedUsers } = useVoiceStore()
+  const { currentChannelId, connectedUsers, isSpeaking, speakingUsers } = useVoiceStore()
 
   useEffect(() => {
     if (serverId) fetchChannels()
@@ -198,17 +198,23 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
                 <SpeakerWaveIcon className="w-5 h-5 mr-2" /><span>{channel.name}</span>
               </button>
               {/* Voice users under channel */}
-              {(voiceUsers[channel.id] || []).map(vu => (
-                <div key={vu.id} className="flex items-center gap-2 pl-9 py-1 text-xs text-gray-400">
-                  <div className="w-5 h-5 rounded-full bg-primary-600 flex items-center justify-center text-white text-[10px] font-bold overflow-hidden flex-shrink-0">
-                    {vu.avatar ? <img src={vu.avatar} alt="" className="w-full h-full object-cover" /> : vu.displayName.charAt(0).toUpperCase()}
+              {(voiceUsers[channel.id] || []).map(vu => {
+                const isUserSpeaking = speakingUsers.has(vu.id) || (vu.id === user?.id && isSpeaking)
+                return (
+                  <div key={vu.id} className="flex items-center gap-2 pl-9 py-1 text-xs text-gray-400">
+                    <div className={clsx(
+                      'w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold overflow-hidden flex-shrink-0 transition-all duration-150',
+                      isUserSpeaking ? 'ring-2 ring-green-500 bg-green-600' : 'bg-primary-600'
+                    )}>
+                      {vu.avatar ? <img src={vu.avatar} alt="" className="w-full h-full object-cover" /> : vu.displayName?.charAt(0).toUpperCase()}
+                    </div>
+                    <span className={clsx('truncate', isUserSpeaking && 'text-green-400')}>{vu.displayName}</span>
+                    {vu.isScreenSharing && <span className="text-[9px] font-bold text-green-400 bg-green-400/10 px-1 rounded">LIVE</span>}
+                    {vu.isMuted && <span className="text-red-400 text-[10px]">🔇</span>}
+                    {vu.isDeafened && <span className="text-red-400 text-[10px]">🔈</span>}
                   </div>
-                  <span className="truncate">{vu.displayName}</span>
-                  {vu.isScreenSharing && <span className="text-[9px] font-bold text-green-400 bg-green-400/10 px-1 rounded">LIVE</span>}
-                  {vu.isMuted && <span className="text-red-400 text-[10px]">🔇</span>}
-                  {vu.isDeafened && <span className="text-red-400 text-[10px]">🔈</span>}
-                </div>
-              ))}
+                )
+              })}
             </div>
           ))}
         </div>

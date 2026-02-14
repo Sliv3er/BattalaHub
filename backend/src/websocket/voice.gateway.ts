@@ -122,6 +122,17 @@ export class VoiceGateway {
     this.server.to(`voice:${channelId}`).emit('force_disconnect', { userId });
   }
 
+  @SubscribeMessage('voice_speaking')
+  handleVoiceSpeaking(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { channelId: string; isSpeaking: boolean },
+  ) {
+    client.to(`voice:${data.channelId}`).emit('voice_speaking', {
+      userId: client.data.user.id,
+      isSpeaking: data.isSpeaking,
+    });
+  }
+
   @SubscribeMessage('webrtc_ice_candidate')
   handleWebRTCIceCandidate(
     @ConnectedSocket() client: Socket,

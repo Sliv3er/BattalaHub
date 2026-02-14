@@ -24,7 +24,7 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
   const {
     currentChannelId, connectedUsers, isMuted, isDeafened, isScreenSharing,
     pingMs, connectionQuality, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreenShare,
-    screenStream, userVolumes, setUserVolume,
+    screenStream, userVolumes, setUserVolume, isSpeaking, speakingUsers,
   } = useVoiceStore()
 
   const [contextUser, setContextUser] = useState<string | null>(null)
@@ -97,19 +97,26 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
             {connectedUsers.length === 0 && (
               <p className="text-gray-500 text-center mt-8">No other users in this channel</p>
             )}
-            {connectedUsers.map(user => (
-              <div key={user.id} onClick={(e) => handleUserClick(user.id, e)}
-                className="flex items-center gap-3 p-3 rounded-xl bg-dark-300/50 animate-fadeIn cursor-pointer hover:bg-dark-300/80 transition-colors">
-                <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
-                  {user.avatar ? (
-                    <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-                  ) : user.displayName.charAt(0).toUpperCase()}
+            {connectedUsers.map(user => {
+              const isUserSpeaking = speakingUsers.has(user.id)
+              return (
+                <div key={user.id} onClick={(e) => handleUserClick(user.id, e)}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-dark-300/50 animate-fadeIn cursor-pointer hover:bg-dark-300/80 transition-colors">
+                  <div className={clsx(
+                    'w-10 h-10 rounded-full flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0 transition-all duration-150',
+                    isUserSpeaking ? 'ring-[3px] ring-green-500 bg-green-600' : 'bg-primary-600'
+                  )}>
+                    {user.avatar ? (
+                      <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                    ) : user.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className={clsx('font-medium flex-1', isUserSpeaking ? 'text-green-400' : 'text-white')}>{user.displayName}</span>
+                  {user.isScreenSharing && <span className="text-[10px] font-bold text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded">LIVE</span>}
+                  {user.isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                  {user.isDeafened && <SpeakerXMarkIcon className="w-4 h-4 text-red-400" />}
                 </div>
-                <span className="text-white font-medium flex-1">{user.displayName}</span>
-                {user.isMuted && <MicOff className="w-4 h-4 text-red-400" />}
-                {user.isDeafened && <SpeakerXMarkIcon className="w-4 h-4 text-red-400" />}
-              </div>
-            ))}
+              )
+            })}
 
             {/* User Context Menu */}
             {contextUser && (

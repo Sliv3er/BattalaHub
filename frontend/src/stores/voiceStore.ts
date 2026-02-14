@@ -26,12 +26,17 @@ interface VoiceState {
   screenStream: MediaStream | null
   pingMs: number | null
   connectionQuality: 'good' | 'medium' | 'poor'
+  userVolumes: Record<string, number>
+  gainNodes: Map<string, GainNode>
+  isSpeaking: boolean
+  speakingUsers: Set<string>
   initVoiceSocket: () => void
   joinVoice: (channelId: string) => Promise<void>
   leaveVoice: () => void
   toggleMute: () => void
   toggleDeafen: () => void
   toggleScreenShare: () => Promise<void>
+  setUserVolume: (userId: string, volume: number) => void
 }
 
 // Sound generation using Web Audio API (shared context)
@@ -83,6 +88,16 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   screenStream: null,
   pingMs: null,
   connectionQuality: 'good',
+  userVolumes: {},
+  gainNodes: new Map(),
+  isSpeaking: false,
+  speakingUsers: new Set<string>(),
+
+  setUserVolume: (userId: string, volume: number) => {
+    const gainNode = get().gainNodes.get(userId)
+    if (gainNode) gainNode.gain.value = volume
+    set({ userVolumes: { ...get().userVolumes, [userId]: volume } })
+  },
 
   initVoiceSocket: () => {
     const existing = get().voiceSocket
@@ -162,6 +177,28 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       if (pc && candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate))
     })
 
+    socket.on('voice_speaking', ({ userId, isSpeaking }: { userId: string; isSpeaking: boolean }) => {
+      const s = get().speakingUsers
+      const next = new Set(s)
+      if (isSpeaking) next.add(userId); else next.delete(userId)
+      set({ speakingUsers: next })
+    })
+
+    socket.on('force_disconnect', ({ userId: targetId }: { userId: string }) => {
+      const myId = JSON.parse(atob(token.split('.')[1])).sub
+      if (targetId === myId) get().leaveVoice()
+    })
+
+    socket.on('server_mute', ({ userId: targetId }: { userId: string }) => {
+      const myId = JSON.parse(atob(token.split('.')[1])).sub
+      if (targetId === myId && !get().isMuted) get().toggleMute()
+    })
+
+    socket.on('server_deafen', ({ userId: targetId }: { userId: string }) => {
+      const myId = JSON.parse(atob(token.split('.')[1])).sub
+      if (targetId === myId && !get().isDeafened) get().toggleDeafen()
+    })
+
     set({ voiceSocket: socket })
   },
 
@@ -179,6 +216,28 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       set({ localStream: stream, currentChannelId: channelId, connectedUsers: [] })
       voiceSocket.emit('join_voice', { channelId })
+
+      // Speaking detection via audio analyser
+      try {
+        const actx = getAudioContext()
+        const src = actx.createMediaStreamSource(stream)
+        const analyser = actx.createAnalyser()
+        analyser.fftSize = 512
+        analyser.smoothingTimeConstant = 0.4
+        src.connect(analyser)
+        const dataArr = new Uint8Array(analyser.frequencyBinCount)
+        const speakCheck = setInterval(() => {
+          if (!get().currentChannelId) { clearInterval(speakCheck); return }
+          analyser.getByteFrequencyData(dataArr)
+          const avg = dataArr.reduce((a, b) => a + b, 0) / dataArr.length
+          const speaking = avg > 15 && !get().isMuted
+          if (speaking !== get().isSpeaking) {
+            set({ isSpeaking: speaking })
+            // Broadcast speaking state to others
+            get().voiceSocket?.emit('voice_speaking', { channelId: get().currentChannelId, isSpeaking: speaking })
+          }
+        }, 100)
+      } catch {}
 
       // Start stats polling
       if (statsInterval) clearInterval(statsInterval)
@@ -209,7 +268,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
 
   leaveVoice: () => {
     playDisconnectSound()
-    const { voiceSocket, localStream, screenStream, peerConnections, currentChannelId } = get()
+    const { voiceSocket, localStream, screenStream, peerConnections, currentChannelId, gainNodes } = get()
+    gainNodes.clear()
     if (statsInterval) { clearInterval(statsInterval); statsInterval = null }
     localStream?.getTracks().forEach(t => t.stop())
     screenStream?.getTracks().forEach(t => t.stop())
@@ -307,9 +367,21 @@ function createPeerConnection(userId: string, initiator: boolean, socket: Socket
   }
 
   pc.ontrack = (e) => {
-    const audio = new Audio()
-    audio.srcObject = e.streams[0]
-    audio.play().catch(() => {})
+    try {
+      const ctx = getAudioContext()
+      const source = ctx.createMediaStreamSource(e.streams[0])
+      const gainNode = ctx.createGain()
+      const store = useVoiceStore.getState()
+      gainNode.gain.value = store.userVolumes[userId] || 1.0
+      source.connect(gainNode)
+      gainNode.connect(ctx.destination)
+      store.gainNodes.set(userId, gainNode)
+    } catch {
+      // Fallback to plain audio
+      const audio = new Audio()
+      audio.srcObject = e.streams[0]
+      audio.play().catch(() => {})
+    }
   }
 
   state.peerConnections.set(userId, pc)

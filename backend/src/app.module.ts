@@ -15,6 +15,8 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { VoiceModule } from './voice/voice.module';
 import { StorageModule } from './storage/storage.module';
 import { EmojisModule } from './emojis/emojis.module';
+import { RolesModule } from './roles/roles.module';
+import { ModerationModule } from './moderation/moderation.module';
 
 // Controllers
 import { AppController } from './app.controller';
@@ -51,6 +53,8 @@ import { HealthController } from './health.controller';
     VoiceModule,
     StorageModule,
     EmojisModule,
+    RolesModule,
+    ModerationModule,
   ],
   controllers: [AppController, HealthController],
 })

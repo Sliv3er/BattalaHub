@@ -25,5 +25,6 @@ import { VoiceModule } from '../voice/voice.module';
     }),
   ],
   providers: [ChatGateway, VoiceGateway],
+  exports: [VoiceGateway],
 })
 export class WebsocketModule {}

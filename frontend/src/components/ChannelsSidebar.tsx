@@ -58,7 +58,9 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
     const voiceChannels = channels.filter(c => c.type === 'VOICE')
     voiceChannels.forEach(ch => {
       client.get(`/voice/channels/${ch.id}/users`).then(r => {
-        setVoiceUsers(prev => ({ ...prev, [ch.id]: r.data }))
+        // API returns { user: { id, displayName, avatar, ... } } — flatten it
+        const users = r.data.map((s: any) => s.user || s)
+        setVoiceUsers(prev => ({ ...prev, [ch.id]: users }))
       }).catch(() => {})
     })
   }, [channels, currentChannelId, connectedUsers])

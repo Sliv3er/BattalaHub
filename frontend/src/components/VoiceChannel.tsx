@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   MicrophoneIcon,
   SpeakerXMarkIcon,
@@ -10,18 +10,50 @@ import { MicrophoneIcon as MicOff } from '@heroicons/react/24/outline'
 import { clsx } from 'clsx'
 import { useVoiceStore } from '../stores/voiceStore'
 import client from '../api/client'
+import toast from 'react-hot-toast'
+import { hasPermission } from '../utils/permissions'
 
 interface VoiceChannelProps {
   channelId: string
   channelName?: string
+  serverId?: string
+  myRoles?: any[]
 }
 
-const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
+const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceChannelProps) => {
   const {
     currentChannelId, connectedUsers, isMuted, isDeafened, isScreenSharing,
     pingMs, connectionQuality, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreenShare,
-    screenStream,
+    screenStream, userVolumes, setUserVolume,
   } = useVoiceStore()
+
+  const [contextUser, setContextUser] = useState<string | null>(null)
+  const [contextPos, setContextPos] = useState({ x: 0, y: 0 })
+  const contextRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (contextRef.current && !contextRef.current.contains(e.target as Node)) setContextUser(null)
+    }
+    if (contextUser) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [contextUser])
+
+  const handleUserClick = (userId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setContextPos({ x: rect.right + 8, y: rect.top })
+    setContextUser(userId)
+  }
+
+  const handleModAction = async (action: string, userId: string) => {
+    if (!serverId) return
+    try {
+      await client.post(`/moderation/${serverId}/${action}/${userId}`)
+      toast.success(`${action} successful`)
+    } catch { toast.error(`Failed to ${action}`) }
+    setContextUser(null)
+  }
 
   const isConnected = currentChannelId === channelId
 
@@ -29,7 +61,8 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
     if (isConnected) {
       // Fetch current users
       client.get(`/voice/channels/${channelId}/users`).then(r => {
-        useVoiceStore.setState({ connectedUsers: r.data })
+        const users = r.data.map((s: any) => s.user || s)
+        useVoiceStore.setState({ connectedUsers: users })
       }).catch(() => {})
     }
   }, [channelId, isConnected])
@@ -65,7 +98,8 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
               <p className="text-gray-500 text-center mt-8">No other users in this channel</p>
             )}
             {connectedUsers.map(user => (
-              <div key={user.id} className="flex items-center gap-3 p-3 rounded-xl bg-dark-300/50 animate-fadeIn">
+              <div key={user.id} onClick={(e) => handleUserClick(user.id, e)}
+                className="flex items-center gap-3 p-3 rounded-xl bg-dark-300/50 animate-fadeIn cursor-pointer hover:bg-dark-300/80 transition-colors">
                 <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
                   {user.avatar ? (
                     <img src={user.avatar} alt="" className="w-full h-full object-cover" />
@@ -76,6 +110,36 @@ const VoiceChannel = ({ channelId, channelName }: VoiceChannelProps) => {
                 {user.isDeafened && <SpeakerXMarkIcon className="w-4 h-4 text-red-400" />}
               </div>
             ))}
+
+            {/* User Context Menu */}
+            {contextUser && (
+              <div ref={contextRef} className="fixed z-50 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 p-3 w-56 animate-scaleIn"
+                style={{ left: Math.min(contextPos.x, window.innerWidth - 240), top: contextPos.y }}>
+                <div className="text-xs text-gray-400 uppercase font-semibold mb-2">User Volume</div>
+                <input type="range" min="0" max="200" value={(userVolumes[contextUser] ?? 1) * 100}
+                  onChange={e => setUserVolume(contextUser, Number(e.target.value) / 100)}
+                  className="w-full accent-primary-500 mb-1" />
+                <div className="text-xs text-gray-400 text-center mb-3">{Math.round((userVolumes[contextUser] ?? 1) * 100)}%</div>
+                {hasPermission(myRoles, 'MUTE_MEMBERS') && (
+                  <button onClick={() => handleModAction('mute', contextUser)}
+                    className="w-full text-left px-3 py-1.5 text-sm text-gray-200 hover:bg-dark-100 rounded-lg transition-colors">
+                    Server Mute
+                  </button>
+                )}
+                {hasPermission(myRoles, 'DEAFEN_MEMBERS') && (
+                  <button onClick={() => handleModAction('deafen', contextUser)}
+                    className="w-full text-left px-3 py-1.5 text-sm text-gray-200 hover:bg-dark-100 rounded-lg transition-colors">
+                    Server Deafen
+                  </button>
+                )}
+                {hasPermission(myRoles, 'MOVE_MEMBERS') && (
+                  <button onClick={() => handleModAction('disconnect', contextUser)}
+                    className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-dark-100 rounded-lg transition-colors">
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

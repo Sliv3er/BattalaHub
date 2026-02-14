@@ -118,6 +118,10 @@ export class VoiceGateway {
     });
   }
 
+  forceDisconnectUser(userId: string, channelId: string) {
+    this.server.to(`voice:${channelId}`).emit('force_disconnect', { userId });
+  }
+
   @SubscribeMessage('webrtc_ice_candidate')
   handleWebRTCIceCandidate(
     @ConnectedSocket() client: Socket,

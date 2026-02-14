@@ -3,6 +3,8 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import client from '../api/client'
+import toast from 'react-hot-toast'
+import { hasPermission } from '../utils/permissions'
 
 interface Member {
   id: string
@@ -20,9 +22,11 @@ interface Member {
 
 interface MembersListProps {
   channelId: string | null
+  serverId?: string
+  myRoles?: any[]
 }
 
-const MembersList = ({ channelId }: MembersListProps) => {
+const MembersList = ({ channelId, serverId, myRoles = [] }: MembersListProps) => {
   const [members, setMembers] = useState<Member[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
@@ -142,6 +146,26 @@ const MembersList = ({ channelId }: MembersListProps) => {
                 </div>
               )}
             </div>
+            {/* Moderation Actions */}
+            {serverId && (hasPermission(myRoles, 'MUTE_MEMBERS') || hasPermission(myRoles, 'DEAFEN_MEMBERS') || hasPermission(myRoles, 'KICK_MEMBERS')) && (
+              <div className="border-t border-dark-100 pt-3 mt-2">
+                <div className="text-xs font-semibold text-gray-400 uppercase mb-2">Moderation</div>
+                <div className="flex gap-2">
+                  {hasPermission(myRoles, 'MUTE_MEMBERS') && (
+                    <button onClick={async () => { try { await client.post(`/moderation/${serverId}/mute/${selectedMember.user.id}`); toast.success('User muted') } catch { toast.error('Failed') } }}
+                      className="px-3 py-1 text-xs bg-dark-100 hover:bg-yellow-600/20 text-yellow-400 rounded-lg transition-colors">Mute</button>
+                  )}
+                  {hasPermission(myRoles, 'DEAFEN_MEMBERS') && (
+                    <button onClick={async () => { try { await client.post(`/moderation/${serverId}/deafen/${selectedMember.user.id}`); toast.success('User deafened') } catch { toast.error('Failed') } }}
+                      className="px-3 py-1 text-xs bg-dark-100 hover:bg-orange-600/20 text-orange-400 rounded-lg transition-colors">Deafen</button>
+                  )}
+                  {hasPermission(myRoles, 'KICK_MEMBERS') && (
+                    <button onClick={async () => { try { await client.post(`/moderation/${serverId}/kick/${selectedMember.user.id}`); toast.success('User kicked'); setSelectedMember(null); fetchMembers() } catch { toast.error('Failed') } }}
+                      className="px-3 py-1 text-xs bg-dark-100 hover:bg-red-600/20 text-red-400 rounded-lg transition-colors">Kick</button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

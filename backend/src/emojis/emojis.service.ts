@@ -11,8 +11,10 @@ export class EmojisService {
 
   async create(serverId: string, name: string, file: Express.Multer.File, userId: string) {
     const url = await this.storageService.uploadFile(file, userId);
+    // Strip colons if user includes them (e.g. ":name:" -> "name")
+    const cleanName = name.replace(/:/g, '').trim();
     return this.prisma.emoji.create({
-      data: { name, url, serverId, creatorId: userId },
+      data: { name: cleanName, url, serverId, creatorId: userId },
     });
   }
 

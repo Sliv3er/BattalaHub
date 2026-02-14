@@ -132,6 +132,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   setUserVolume: (userId: string, volume: number) => {
     const gainNode = get().gainNodes.get(userId)
     if (gainNode) gainNode.gain.value = volume
+    // Also update any HTML audio elements playing this user's stream
+    document.querySelectorAll<HTMLAudioElement>(`audio[data-user-id="${userId}"]`).forEach(a => { a.volume = volume })
     set({ userVolumes: { ...get().userVolumes, [userId]: volume } })
   },
 
@@ -170,6 +172,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         playLeaveSound()
         const pc = state.peerConnections.get(userId)
         if (pc) { pc.close(); state.peerConnections.delete(userId) }
+        document.querySelectorAll<HTMLAudioElement>(`audio[data-user-id="${userId}"]`).forEach(a => a.remove())
       }
     })
 
@@ -252,6 +255,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     try {
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       set({ localStream: stream, currentChannelId: channelId, connectedUsers: [] })
+      playJoinSound()
       voiceSocket.emit('join_voice', { channelId })
 
       // Speaking detection via audio analyser
@@ -311,6 +315,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     localStream?.getTracks().forEach(t => t.stop())
     screenStream?.getTracks().forEach(t => t.stop())
     peerConnections.forEach(pc => pc.close())
+    document.querySelectorAll<HTMLAudioElement>('audio[data-user-id]').forEach(a => a.remove())
     if (voiceSocket && currentChannelId) voiceSocket.emit('leave_voice', {})
     set({
       currentChannelId: null,
@@ -427,18 +432,25 @@ function createPeerConnection(userId: string, initiator: boolean, socket: Socket
       useVoiceStore.setState({ remoteStreams: streams })
     }
     if (e.track.kind === 'audio') {
+      // Use HTML Audio element for reliable playback
+      const audio = document.createElement('audio')
+      audio.setAttribute('data-user-id', userId)
+      audio.srcObject = e.streams[0]
+      audio.autoplay = true
+      audio.volume = store.userVolumes[userId] ?? 1.0
+      document.body.appendChild(audio)
+      audio.play().catch((err) => console.warn('[Voice] Audio play failed:', err))
+      // Also set up gain node for fine volume control
       try {
         const ctx = getAudioContext()
         const source = ctx.createMediaStreamSource(e.streams[0])
         const gainNode = ctx.createGain()
-        gainNode.gain.value = store.userVolumes[userId] || 1.0
+        gainNode.gain.value = store.userVolumes[userId] ?? 1.0
         source.connect(gainNode)
-        gainNode.connect(ctx.destination)
+        // Don't connect to destination — the <audio> element handles playback
         store.gainNodes.set(userId, gainNode)
-      } catch {
-        const audio = new Audio()
-        audio.srcObject = e.streams[0]
-        audio.play().catch(() => {})
+      } catch (err) {
+        console.warn('[Voice] GainNode setup failed:', err)
       }
     }
   }

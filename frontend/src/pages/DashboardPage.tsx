@@ -6,6 +6,7 @@ import VoiceChannel from '../components/VoiceChannel'
 import MembersList from '../components/MembersList'
 import { useAuthStore } from '../stores/authStore'
 import { useVoiceStore } from '../stores/voiceStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import client from '../api/client'
 
 const DashboardPage = () => {
@@ -17,6 +18,32 @@ const DashboardPage = () => {
   const [serverOwnerId, setServerOwnerId] = useState<string>('')
   const { user } = useAuthStore()
   const voiceChannelId = useVoiceStore(s => s.currentChannelId)
+
+  // Global keybind listener
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't trigger keybinds when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
+
+      const { keybinds } = useSettingsStore.getState()
+      const vs = useVoiceStore.getState()
+      if (!vs.currentChannelId) return // Only active when in voice
+
+      if (e.code === keybinds.mute) {
+        e.preventDefault()
+        vs.toggleMute()
+      } else if (e.code === keybinds.deafen) {
+        e.preventDefault()
+        vs.toggleDeafen()
+      } else if (e.code === keybinds.disconnect) {
+        e.preventDefault()
+        vs.leaveVoice()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Fetch current user's roles for selected server
   useEffect(() => {

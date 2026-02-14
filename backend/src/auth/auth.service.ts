@@ -56,13 +56,13 @@ export class AuthService {
     // Find user by email or username
     const user = await this.usersService.findByEmailOrUsername(identifier, identifier);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Incorrect email or password');
     }
 
     // Verify password
     const isPasswordValid = await compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Incorrect email or password');
     }
 
     // Update user online status

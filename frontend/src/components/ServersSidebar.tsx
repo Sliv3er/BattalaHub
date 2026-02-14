@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { clsx } from 'clsx'
 import toast from 'react-hot-toast'
 import client from '../api/client'
@@ -18,6 +18,7 @@ interface ServersSidebarProps {
 const ServersSidebar = ({ selectedServerId, onSelectServer }: ServersSidebarProps) => {
   const [servers, setServers] = useState<Server[]>([])
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showJoinModal, setShowJoinModal] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -98,6 +99,15 @@ const ServersSidebar = ({ selectedServerId, onSelectServer }: ServersSidebarProp
         >
           <PlusIcon className="w-6 h-6 text-gray-400 group-hover:text-white" />
         </button>
+
+        {/* Join Server Button */}
+        <button
+          onClick={() => setShowJoinModal(true)}
+          className="w-12 h-12 rounded-lg bg-dark-200 hover:bg-green-600 flex items-center justify-center transition-colors duration-200 group"
+          title="Join Server"
+        >
+          <MagnifyingGlassIcon className="w-6 h-6 text-gray-400 group-hover:text-white" />
+        </button>
       </div>
 
       {/* Create Server Modal */}
@@ -105,6 +115,17 @@ const ServersSidebar = ({ selectedServerId, onSelectServer }: ServersSidebarProp
         <CreateServerModal
           onClose={() => setShowCreateModal(false)}
           onCreateServer={createServer}
+        />
+      )}
+
+      {/* Join Server Modal */}
+      {showJoinModal && (
+        <JoinServerModal
+          onClose={() => setShowJoinModal(false)}
+          onJoined={(server) => {
+            setServers(prev => [...prev, server])
+            onSelectServer(server.id)
+          }}
         />
       )}
     </div>
@@ -172,6 +193,87 @@ const CreateServerModal = ({ onClose, onCreateServer }: CreateServerModalProps) 
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+interface JoinServerModalProps {
+  onClose: () => void
+  onJoined: (server: Server) => void
+}
+
+const JoinServerModal = ({ onClose, onJoined }: JoinServerModalProps) => {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<{ id: string; name: string; icon?: string; _count?: { members: number } }[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [joiningId, setJoiningId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return }
+    const timeout = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const res = await client.get('/servers/search', { params: { name: query.trim() } })
+        setResults(res.data)
+      } catch { setResults([]) }
+      finally { setIsSearching(false) }
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [query])
+
+  const handleJoin = async (serverId: string) => {
+    setJoiningId(serverId)
+    try {
+      await client.post(`/servers/${serverId}/join`)
+      const server = results.find(r => r.id === serverId)
+      if (server) onJoined({ id: server.id, name: server.name, icon: server.icon })
+      toast.success('Joined server!')
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to join server')
+    } finally { setJoiningId(null) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-dark-200 rounded-lg p-6 w-96">
+        <h2 className="text-xl font-bold text-white mb-4">Join a Server</h2>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by server name..."
+          className="input w-full mb-4"
+          autoFocus
+        />
+        <div className="max-h-60 overflow-y-auto space-y-2 mb-4">
+          {isSearching && <p className="text-gray-400 text-sm text-center">Searching...</p>}
+          {!isSearching && query.trim() && results.length === 0 && (
+            <p className="text-gray-400 text-sm text-center">No servers found</p>
+          )}
+          {results.map(server => (
+            <div key={server.id} className="flex items-center gap-3 p-3 bg-dark-300 rounded-lg">
+              <div className="w-10 h-10 rounded-lg bg-primary-600 flex items-center justify-center text-white font-bold">
+                {server.icon ? <img src={server.icon} alt="" className="w-10 h-10 rounded-lg object-cover" /> : server.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white font-medium truncate">{server.name}</div>
+                <div className="text-xs text-gray-400">{server._count?.members || 0} members</div>
+              </div>
+              <button
+                onClick={() => handleJoin(server.id)}
+                disabled={joiningId === server.id}
+                className="btn-primary px-3 py-1 text-sm"
+              >
+                {joiningId === server.id ? 'Joining...' : 'Join'}
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end">
+          <button onClick={onClose} className="btn-secondary">Cancel</button>
+        </div>
       </div>
     </div>
   )

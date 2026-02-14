@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/jpeg" href="/logo.jpeg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Battala Hub - Real-time Communication Platform</title>
     <meta name="description" content="A modern real-time communication platform for teams and communities" />
@@ -11,7 +11,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body class="bg-dark-400 text-white font-sans antialiased">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Loading screen (shown until React mounts) -->
+      <div id="loading-screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#1a1a2e;">
+        <img src="/logo.jpeg" alt="Battala Hub" style="width:128px;height:128px;border-radius:24px;margin-bottom:24px;animation:pulse 1.5s ease-in-out infinite;" />
+        <div style="color:#8b8b9e;font-size:14px;font-family:Inter,sans-serif;">Loading Battala Hub...</div>
+      </div>
+      <style>
+        @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.05);opacity:0.85} }
+      </style>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
+  const [loginError, setLoginError] = useState('')
   const [formData, setFormData] = useState({
     identifier: '',
     username: '',
@@ -18,10 +19,14 @@ const AuthPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setLoginError('')
 
     try {
       if (isLogin) {
-        await login(formData.identifier, formData.password)
+        const success = await login(formData.identifier, formData.password)
+        if (!success) {
+          setLoginError('Incorrect email or password')
+        }
       } else {
         await register(
           formData.username,
@@ -47,6 +52,7 @@ const AuthPage = () => {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
+          <img src="/logo.jpeg" alt="Battala Hub" className="w-20 h-20 rounded-2xl mx-auto mb-4" />
           <h1 className="text-4xl font-bold text-white mb-2">
             Battala Hub
           </h1>
@@ -143,6 +149,10 @@ const AuthPage = () => {
               />
             </div>
 
+            {loginError && isLogin && (
+              <p className="text-red-500 text-sm -mt-2">{loginError}</p>
+            )}
+
             <button
               type="submit"
               disabled={isLoading}
@@ -160,7 +170,7 @@ const AuthPage = () => {
               </span>{' '}
               <button
                 type="button"
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => { setIsLogin(!isLogin); setLoginError('') }}
                 className="text-primary-400 hover:text-primary-300 font-medium"
               >
                 {isLogin ? 'Sign up' : 'Sign in'}

@@ -52,9 +52,10 @@ const getAudioContext = (): AudioContext => {
   return audioCtx
 }
 
-const playTone = (frequencies: [number, number][], duration: number, volume = 0.3) => {
+const playTone = async (frequencies: [number, number][], duration: number, volume = 0.3) => {
   try {
     const ctx = getAudioContext()
+    if (ctx.state === 'suspended') await ctx.resume()
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.connect(gain)
@@ -69,7 +70,18 @@ const playTone = (frequencies: [number, number][], duration: number, volume = 0.
     gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration)
     osc.start(ctx.currentTime)
     osc.stop(ctx.currentTime + duration)
-  } catch {}
+  } catch (e) { console.warn('[Sound] playTone failed:', e) }
+}
+
+// Ensure AudioContext is resumed on first user interaction
+if (typeof window !== 'undefined') {
+  const resumeCtx = () => {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume()
+    document.removeEventListener('click', resumeCtx)
+    document.removeEventListener('keydown', resumeCtx)
+  }
+  document.addEventListener('click', resumeCtx)
+  document.addEventListener('keydown', resumeCtx)
 }
 
 export const playJoinSound = () => playTone([[400, 0.07], [600, 0.07], [800, 0.06]], 0.2, 0.25)
@@ -358,8 +370,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         const display = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: fps, height: { ideal: height } }, audio: true })
         playScreenShareSound()
         const videoTrack = display.getVideoTracks()[0]
-        peerConnections.forEach(pc => {
+        const socket = get().voiceSocket
+        peerConnections.forEach((pc, peerId) => {
           pc.addTrack(videoTrack, display)
+          // Renegotiate to send the new track
+          pc.createOffer().then(offer => {
+            pc.setLocalDescription(offer)
+            socket?.emit('webrtc_offer', {
+              offer,
+              targetUserId: peerId,
+              channelId: currentChannelId,
+            })
+          })
         })
         videoTrack.onended = () => {
           set({ isScreenSharing: false, screenStream: null })

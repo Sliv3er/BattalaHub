@@ -98,6 +98,23 @@ export class ServersService {
     });
   }
 
+  async searchByName(name: string, userId: string) {
+    if (!name || name.trim().length === 0) return [];
+    return this.prisma.server.findMany({
+      where: {
+        name: { contains: name, mode: 'insensitive' },
+        members: { none: { userId } },
+      },
+      select: {
+        id: true,
+        name: true,
+        icon: true,
+        _count: { select: { members: true } },
+      },
+      take: 20,
+    });
+  }
+
   async findOne(id: string, userId: string) {
     const server = await this.prisma.server.findFirst({
       where: {

@@ -457,8 +457,8 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
         const username = mentionProfile?.username || message.author.username
         const member = channelMembers.find(m => m.user.username === username) as any
         const pos = mentionProfile || authorProfile!
-        const displayName = member?.user?.displayName || message.author.displayName || username
-        const avatar = member?.user?.avatar || message.author.avatar
+        const displayName = member?.user?.displayName || (mentionProfile ? username : message.author.displayName) || username
+        const avatar = member?.user?.avatar || (mentionProfile ? undefined : message.author.avatar)
         return (
           <div ref={mentionProfileRef} className="fixed z-50 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 overflow-hidden w-72 animate-scaleIn"
             style={{ left: Math.min(pos.x, window.innerWidth - 300), top: Math.max(10, pos.y - 10), transform: 'translateY(-100%)' }}>

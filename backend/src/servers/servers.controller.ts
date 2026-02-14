@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Request,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ServersService } from './servers.service';
@@ -35,6 +36,13 @@ export class ServersController {
   @ApiResponse({ status: 200, description: 'Servers retrieved successfully' })
   findAll(@Request() req) {
     return this.serversService.findAll(req.user.id);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search servers by name' })
+  @ApiResponse({ status: 200, description: 'Search results' })
+  searchServers(@Query('name') name: string, @Request() req) {
+    return this.serversService.searchByName(name, req.user.id);
   }
 
   @Get(':id')

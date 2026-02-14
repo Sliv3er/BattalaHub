@@ -9,6 +9,18 @@ A production-grade Discord alternative featuring real-time chat, voice channels 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![WebRTC](https://img.shields.io/badge/WebRTC-333333?style=flat&logo=webrtc&logoColor=white)
 
+## 📸 Screenshots
+
+| Login | Chat | Voice |
+|-------|------|-------|
+| ![Login](docs/screenshots/login.png) | ![Chat](docs/screenshots/chat.png) | ![Voice](docs/screenshots/voice.png) |
+
+| Server Settings | Screen Share | Members |
+|----------------|--------------|---------|
+| ![Settings](docs/screenshots/settings.png) | ![Stream](docs/screenshots/stream.png) | ![Members](docs/screenshots/members.png) |
+
+> *Screenshots coming soon — add your own to `docs/screenshots/`*
+
 ## ✨ Features
 
 ### 💬 Real-Time Chat
@@ -33,6 +45,7 @@ A production-grade Discord alternative featuring real-time chat, voice channels 
 - Create, edit, and delete text/voice channels
 - Invite system with shareable codes
 - Role-based membership
+- **Join servers by name** — search and join public servers
 
 ### 👤 User Profiles
 - Profile settings with avatar upload
@@ -171,6 +184,7 @@ battala-hub/
 - `GET /api/servers/:id` — Get server details
 - `PATCH /api/servers/:id` — Update server
 - `DELETE /api/servers/:id` — Delete server
+- `GET /api/servers/search?name=` — Search servers by name
 - `POST /api/servers/:id/join` — Join server
 - `POST /api/servers/:id/invites` — Create invite
 - `POST /api/servers/join/:inviteCode` — Join via invite

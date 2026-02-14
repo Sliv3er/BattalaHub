@@ -57,13 +57,29 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
 
   // Fetch voice users for each voice channel
   useEffect(() => {
-    const voiceChannels = channels.filter(c => c.type === 'VOICE')
-    voiceChannels.forEach(ch => {
-      client.get(`/voice/channels/${ch.id}/users`).then(r => {
-        const users = r.data.map((s: any) => s.user || s)
-        setVoiceUsers(prev => ({ ...prev, [ch.id]: users }))
-      }).catch(() => {})
-    })
+    const fetchVoiceUsers = () => {
+      const voiceChannels = channels.filter(c => c.type === 'VOICE')
+      voiceChannels.forEach(ch => {
+        client.get(`/voice/channels/${ch.id}/users`).then(r => {
+          const users = r.data.map((s: any) => s.user || s)
+          setVoiceUsers(prev => ({ ...prev, [ch.id]: users }))
+        }).catch(() => {})
+      })
+    }
+    fetchVoiceUsers()
+
+    // Listen for real-time voice join/leave events
+    const voiceSocket = useVoiceStore.getState().voiceSocket
+    if (voiceSocket) {
+      const handleVoiceJoin = () => fetchVoiceUsers()
+      const handleVoiceLeave = () => fetchVoiceUsers()
+      voiceSocket.on('user_joined_voice', handleVoiceJoin)
+      voiceSocket.on('user_left_voice', handleVoiceLeave)
+      return () => {
+        voiceSocket.off('user_joined_voice', handleVoiceJoin)
+        voiceSocket.off('user_left_voice', handleVoiceLeave)
+      }
+    }
   }, [channels, currentChannelId, connectedUsers])
 
   // Close context menu on outside click

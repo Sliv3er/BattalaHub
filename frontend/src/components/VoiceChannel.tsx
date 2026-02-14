@@ -24,9 +24,10 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
   const {
     currentChannelId, connectedUsers, isMuted, isDeafened, isScreenSharing,
     pingMs, connectionQuality, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleScreenShare,
-    screenStream, userVolumes, setUserVolume, isSpeaking, speakingUsers,
+    screenStream, userVolumes, setUserVolume, isSpeaking, speakingUsers, setStreamQuality, streamQuality,
   } = useVoiceStore()
 
+  const [showQualityPicker, setShowQualityPicker] = useState(false)
   const [contextUser, setContextUser] = useState<string | null>(null)
   const [contextPos, setContextPos] = useState({ x: 0, y: 0 })
   const contextRef = useRef<HTMLDivElement>(null)
@@ -172,10 +173,29 @@ const VoiceChannel = ({ channelId, channelName, serverId, myRoles = [] }: VoiceC
               className={clsx('p-3 rounded-full transition-colors', isDeafened ? 'bg-red-500/20 text-red-400' : 'bg-dark-200 text-gray-300 hover:text-white hover:bg-dark-100')}>
               <SpeakerXMarkIcon className="w-6 h-6" />
             </button>
-            <button onClick={toggleScreenShare}
-              className={clsx('p-3 rounded-full transition-colors', isScreenSharing ? 'bg-green-500/20 text-green-400' : 'bg-dark-200 text-gray-300 hover:text-white hover:bg-dark-100')}>
-              <ComputerDesktopIcon className="w-6 h-6" />
-            </button>
+            <div className="relative">
+              <button onClick={() => { if (isScreenSharing) { toggleScreenShare() } else { setShowQualityPicker(!showQualityPicker) } }}
+                className={clsx('p-3 rounded-full transition-colors', isScreenSharing ? 'bg-green-500/20 text-green-400' : 'bg-dark-200 text-gray-300 hover:text-white hover:bg-dark-100')}>
+                <ComputerDesktopIcon className="w-6 h-6" />
+              </button>
+              {showQualityPicker && !isScreenSharing && (
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 p-3 w-52 animate-scaleIn">
+                  <div className="text-xs font-semibold text-gray-400 uppercase mb-2">Stream Quality</div>
+                  {([
+                    { label: '720p 15 FPS', fps: 15, height: 720 },
+                    { label: '720p 30 FPS', fps: 30, height: 720 },
+                    { label: '1080p 30 FPS', fps: 30, height: 1080 },
+                    { label: '1080p 60 FPS', fps: 60, height: 1080 },
+                  ] as const).map(opt => (
+                    <button key={opt.label} onClick={() => { setStreamQuality(opt.fps, opt.height); setShowQualityPicker(false); toggleScreenShare() }}
+                      className={clsx('w-full text-left px-3 py-2 text-sm rounded-lg transition-colors',
+                        streamQuality.fps === opt.fps && streamQuality.height === opt.height ? 'bg-primary-600 text-white' : 'text-gray-300 hover:bg-dark-200 hover:text-white')}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button onClick={leaveVoice}
               className="p-3 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors">
               <PhoneXMarkIcon className="w-6 h-6" />

@@ -42,7 +42,9 @@ const ServerSettings = ({ serverId, onClose, onUpdated }: ServerSettingsProps) =
   const [isUploadingEmoji, setIsUploadingEmoji] = useState(false)
   const iconInputRef = useRef<HTMLInputElement>(null)
   const emojiInputRef = useRef<HTMLInputElement>(null)
-  const [tab, setTab] = useState<'general' | 'emojis' | 'roles'>('general')
+  const [tab, setTab] = useState<'general' | 'invites' | 'emojis' | 'roles'>('general')
+  const [invites, setInvites] = useState<any[]>([])
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false)
   const [roles, setRoles] = useState<Role[]>([])
   const [editingRole, setEditingRole] = useState<Role | null>(null)
   const [roleName, setRoleName] = useState('')
@@ -55,7 +57,30 @@ const ServerSettings = ({ serverId, onClose, onUpdated }: ServerSettingsProps) =
     fetchServer()
     fetchEmojis()
     fetchRoles()
+    fetchInvites()
   }, [serverId])
+
+  const fetchInvites = async () => {
+    try {
+      const res = await client.get(`/servers/${serverId}/invites`)
+      setInvites(res.data)
+    } catch {}
+  }
+
+  const generateInvite = async () => {
+    setIsGeneratingInvite(true)
+    try {
+      const res = await client.post(`/servers/${serverId}/invites`, {})
+      toast.success('Invite link generated')
+      fetchInvites()
+    } catch { toast.error('Failed to generate invite') }
+    finally { setIsGeneratingInvite(false) }
+  }
+
+  const copyInviteLink = (code: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/invite/${code}`)
+    toast.success('Invite link copied!')
+  }
 
   const fetchServer = async () => {
     try {
@@ -180,10 +205,10 @@ const ServerSettings = ({ serverId, onClose, onUpdated }: ServerSettingsProps) =
 
         {/* Tabs */}
         <div className="flex border-b border-dark-100">
-          {(['general', 'emojis', 'roles'] as const).map(t => (
+          {(['general', 'invites', 'emojis', 'roles'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${tab === t ? 'text-white border-b-2 border-primary-500' : 'text-gray-400 hover:text-gray-200'}`}>
-              {t === 'general' ? 'General' : t === 'emojis' ? 'Emojis' : 'Roles'}
+              className={`flex-1 py-3 text-sm font-medium transition-colors capitalize ${tab === t ? 'text-white border-b-2 border-primary-500' : 'text-gray-400 hover:text-gray-200'}`}>
+              {t}
             </button>
           ))}
         </div>
@@ -215,6 +240,27 @@ const ServerSettings = ({ serverId, onClose, onUpdated }: ServerSettingsProps) =
                 </button>
               </div>
             </>
+          )}
+          {tab === 'invites' && (
+            <div className="space-y-4">
+              <button onClick={generateInvite} disabled={isGeneratingInvite}
+                className="btn-primary px-4 py-2 disabled:opacity-50">
+                {isGeneratingInvite ? 'Generating...' : 'Generate Invite Link'}
+              </button>
+              {invites.length > 0 && (
+                <div className="space-y-2">
+                  {invites.map((inv: any) => (
+                    <div key={inv.id || inv.code} className="flex items-center gap-3 p-3 bg-dark-200 rounded-xl">
+                      <code className="text-sm text-gray-300 flex-1 truncate">{window.location.origin}/invite/{inv.code}</code>
+                      <span className="text-xs text-gray-500">{inv.uses ?? inv._count?.uses ?? 0} uses</span>
+                      <button onClick={() => copyInviteLink(inv.code)}
+                        className="text-xs text-primary-400 hover:text-primary-300 font-medium">Copy</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {invites.length === 0 && <p className="text-gray-500 text-sm">No invites yet</p>}
+            </div>
           )}
           {tab === 'emojis' && (
             <>

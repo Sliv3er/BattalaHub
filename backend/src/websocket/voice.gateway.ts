@@ -4,6 +4,7 @@ import {
   MessageBody,
   ConnectedSocket,
   WebSocketServer,
+  OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { VoiceService } from '../voice/voice.service';
@@ -18,7 +19,7 @@ import { PrismaService } from '../database/prisma.service';
     credentials: true,
   },
 })
-export class VoiceGateway {
+export class VoiceGateway implements OnGatewayConnection {
   @WebSocketServer()
   server: Server;
 
@@ -27,6 +28,24 @@ export class VoiceGateway {
     private jwtService: JwtService,
     private prisma: PrismaService,
   ) {}
+
+  async handleConnection(client: Socket) {
+    try {
+      const token = client.handshake.auth.token || client.handshake.headers.authorization?.split(' ')[1];
+      if (!token) { client.disconnect(); return; }
+      const payload = this.jwtService.verify(token);
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { id: true, username: true, displayName: true, avatar: true },
+      });
+      if (!user) { client.disconnect(); return; }
+      client.data.user = user;
+      console.log(`🎤 Voice: ${user.username} connected`);
+    } catch (error) {
+      console.error('Voice connection error:', error);
+      client.disconnect();
+    }
+  }
 
   @SubscribeMessage('join_voice')
   async handleJoinVoice(

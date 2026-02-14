@@ -28,8 +28,10 @@ interface VoiceState {
   connectionQuality: 'good' | 'medium' | 'poor'
   userVolumes: Record<string, number>
   gainNodes: Map<string, GainNode>
+  streamQuality: { fps: number; height: number }
   isSpeaking: boolean
   speakingUsers: Set<string>
+  setStreamQuality: (fps: number, height: number) => void
   initVoiceSocket: () => void
   joinVoice: (channelId: string) => Promise<void>
   leaveVoice: () => void
@@ -90,8 +92,14 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   connectionQuality: 'good',
   userVolumes: {},
   gainNodes: new Map(),
+  streamQuality: { fps: 30, height: 720 },
   isSpeaking: false,
   speakingUsers: new Set<string>(),
+
+  setStreamQuality: (fps: number, height: number) => {
+    set({ streamQuality: { fps, height } })
+    useSettingsStore.getState().setStreamQuality(fps, height)
+  },
 
   setUserVolume: (userId: string, volume: number) => {
     const gainNode = get().gainNodes.get(userId)
@@ -324,7 +332,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       }
     } else {
       try {
-        const display = await navigator.mediaDevices.getDisplayMedia({ video: true })
+        const { fps, height } = get().streamQuality
+        const display = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: fps, height: { ideal: height } }, audio: true })
         playScreenShareSound()
         const videoTrack = display.getVideoTracks()[0]
         peerConnections.forEach(pc => {

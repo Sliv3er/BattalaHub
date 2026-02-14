@@ -4,7 +4,6 @@ import { clsx } from 'clsx'
 import client from '../api/client'
 import { useAuthStore } from '../stores/authStore'
 import { useVoiceStore } from '../stores/voiceStore'
-import ProfileSettings from './ProfileSettings'
 import ServerSettings from './ServerSettings'
 import AppSettings from './AppSettings'
 
@@ -37,7 +36,6 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
   const [newChannelName, setNewChannelName] = useState('')
   const [newChannelType, setNewChannelType] = useState<'TEXT' | 'VOICE'>('TEXT')
   const [isCreating, setIsCreating] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
   const [showServerSettings, setShowServerSettings] = useState(false)
   const [showAppSettings, setShowAppSettings] = useState(false)
   const [voiceUsers, setVoiceUsers] = useState<Record<string, VoiceUser[]>>({})
@@ -189,16 +187,22 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
               <PlusIcon className="w-4 h-4" />
             </button>
           </div>
-          {channels.filter(c => c.type === 'VOICE').map(channel => (
+          {channels.filter(c => c.type === 'VOICE').map(channel => {
+            // Merge current user into voice users list if they're in this channel
+            const fetchedUsers = voiceUsers[channel.id] || []
+            const channelVoiceUsers = currentChannelId === channel.id && user && !fetchedUsers.some(u => u.id === user.id)
+              ? [...fetchedUsers, { id: user.id, displayName: user.displayName, avatar: user.avatar }]
+              : fetchedUsers
+            return (
             <div key={channel.id}>
               <button
-                onClick={() => onSelectChannel(channel.id, 'VOICE', channel.name)}
+                onClick={() => { onSelectChannel(channel.id, 'VOICE', channel.name); useVoiceStore.getState().joinVoice(channel.id) }}
                 onContextMenu={e => handleContextMenu(e, channel)}
                 className={clsx('channel-item', selectedChannelId === channel.id && 'active')}>
                 <SpeakerWaveIcon className="w-5 h-5 mr-2" /><span>{channel.name}</span>
               </button>
               {/* Voice users under channel */}
-              {(voiceUsers[channel.id] || []).map(vu => {
+              {channelVoiceUsers.map(vu => {
                 const isUserSpeaking = speakingUsers.has(vu.id) || (vu.id === user?.id && isSpeaking)
                 return (
                   <div key={vu.id} className="flex items-center gap-2 pl-9 py-1 text-xs text-gray-400">
@@ -216,7 +220,8 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
                 )
               })}
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -234,10 +239,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
             <div className="text-sm font-medium text-white truncate">{user?.displayName}</div>
             <div className="text-xs text-gray-400 truncate">@{user?.username}</div>
           </div>
-          <button onClick={() => setShowAppSettings(true)} className="text-gray-400 hover:text-white transition-colors p-1" title="App Settings">
-            <Cog6ToothIcon className="w-5 h-5" />
-          </button>
-          <button onClick={() => setShowProfile(true)} className="text-gray-400 hover:text-white transition-colors p-1" title="Profile Settings">
+          <button onClick={() => setShowAppSettings(true)} className="text-gray-400 hover:text-white transition-colors p-1" title="Settings">
             <Cog6ToothIcon className="w-5 h-5" />
           </button>
           <button onClick={logout} className="text-gray-400 hover:text-red-400 transition-colors p-1" title="Sign Out">
@@ -287,7 +289,6 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
       )}
 
       {/* Modals */}
-      {showProfile && <ProfileSettings onClose={() => setShowProfile(false)} />}
       {showServerSettings && serverId && (
         <ServerSettings serverId={serverId} onClose={() => setShowServerSettings(false)} onUpdated={fetchChannels} />
       )}

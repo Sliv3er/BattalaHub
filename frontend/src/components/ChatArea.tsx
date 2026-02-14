@@ -258,7 +258,7 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
                     {emojis.map(emoji => (
                       <button key={emoji.id} onClick={() => insertEmoji(emoji)} title={`:${emoji.name}:`}
                         className="p-1.5 rounded-lg hover:bg-dark-200 transition-colors">
-                        <img src={emoji.url} alt={emoji.name} className="w-7 h-7 object-contain" />
+                        <img src={emoji.url} alt={emoji.name} className="w-9 h-9 object-contain" />
                       </button>
                     ))}
                   </div>
@@ -315,7 +315,7 @@ const MessageItem = ({ message, serverEmojis, isOwn, onEdit, onDelete }: Message
     return parts.map((part, i) => {
       if (i % 2 === 1) {
         const emoji = serverEmojis.find(e => e.name === part)
-        if (emoji) return <img key={i} src={emoji.url} alt={`:${part}:`} className="inline-block w-6 h-6 align-middle" />
+        if (emoji) return <img key={i} src={emoji.url} alt={`:${part}:`} className="inline-block w-8 h-8 align-middle" />
       }
       return <span key={i}>{part}</span>
     })

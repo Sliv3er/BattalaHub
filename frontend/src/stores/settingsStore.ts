@@ -11,10 +11,13 @@ interface SettingsState {
   keybinds: Keybinds
   selectedMic: string
   selectedHeadset: string
+  streamFps: number
+  streamHeight: number
   toggleNotificationSounds: () => void
   setKeybind: (action: keyof Keybinds, combo: string) => void
   setSelectedMic: (deviceId: string) => void
   setSelectedHeadset: (deviceId: string) => void
+  setStreamQuality: (fps: number, height: number) => void
 }
 
 const loadFromStorage = <T>(key: string, fallback: T): T => {
@@ -29,6 +32,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   keybinds: loadFromStorage<Keybinds>('settings:keybinds', { mute: 'KeyM', deafen: 'KeyD', disconnect: 'KeyE' }),
   selectedMic: loadFromStorage('settings:selectedMic', ''),
   selectedHeadset: loadFromStorage('settings:selectedHeadset', ''),
+  streamFps: loadFromStorage('settings:streamFps', 30),
+  streamHeight: loadFromStorage('settings:streamHeight', 720),
 
   toggleNotificationSounds: () => set(s => {
     const v = !s.notificationSounds
@@ -50,5 +55,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setSelectedHeadset: (deviceId) => set(() => {
     localStorage.setItem('settings:selectedHeadset', JSON.stringify(deviceId))
     return { selectedHeadset: deviceId }
+  }),
+
+  setStreamQuality: (fps, height) => set(() => {
+    localStorage.setItem('settings:streamFps', JSON.stringify(fps))
+    localStorage.setItem('settings:streamHeight', JSON.stringify(height))
+    return { streamFps: fps, streamHeight: height }
   }),
 }))

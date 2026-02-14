@@ -59,7 +59,12 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
       fetchMessages()
       fetchChannelInfo()
       joinChannel(channelId)
-      client.get(`/channels/${channelId}/members`).then(r => setChannelMembers(r.data)).catch(() => {})
+      const membersUrl = serverId ? `/servers/${serverId}` : `/channels/${channelId}/members`
+      if (serverId) {
+        client.get(membersUrl).then(r => setChannelMembers(r.data.members || [])).catch(() => {})
+      } else {
+        client.get(membersUrl).then(r => setChannelMembers(r.data)).catch(() => {})
+      }
       return () => { leaveChannel(channelId) }
     }
   }, [channelId])
@@ -359,15 +364,19 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
   const [editContent, setEditContent] = useState(message.content)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [mentionProfile, setMentionProfile] = useState<{ username: string; x: number; y: number } | null>(null)
+  const [authorProfile, setAuthorProfile] = useState<{ x: number; y: number } | null>(null)
   const mentionProfileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (mentionProfileRef.current && !mentionProfileRef.current.contains(e.target as Node)) setMentionProfile(null)
+      if (mentionProfileRef.current && !mentionProfileRef.current.contains(e.target as Node)) {
+        setMentionProfile(null)
+        setAuthorProfile(null)
+      }
     }
-    if (mentionProfile) document.addEventListener('mousedown', handler)
+    if (mentionProfile || authorProfile) document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [mentionProfile])
+  }, [mentionProfile, authorProfile])
   const isImage = /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(message.content)
   const isFileUrl = /^https?:\/\//.test(message.content) || message.content.startsWith('/uploads/')
 
@@ -443,28 +452,54 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
         </div>
       )}
 
-      {/* Mention profile popover */}
-      {mentionProfile && (() => {
-        const member = channelMembers.find(m => m.user.username === mentionProfile.username)
+      {/* Profile popover (mention click or author click) */}
+      {(mentionProfile || authorProfile) && (() => {
+        const username = mentionProfile?.username || message.author.username
+        const member = channelMembers.find(m => m.user.username === username) as any
+        const pos = mentionProfile || authorProfile!
+        const displayName = member?.user?.displayName || message.author.displayName || username
+        const avatar = member?.user?.avatar || message.author.avatar
         return (
-          <div ref={mentionProfileRef} className="fixed z-50 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 p-4 w-56 animate-scaleIn"
-            style={{ left: mentionProfile.x, top: mentionProfile.y - 10, transform: 'translateY(-100%)' }}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-bold overflow-hidden flex-shrink-0">
-                {member?.user.avatar ? <img src={member.user.avatar} className="w-full h-full object-cover" /> : (member?.user.displayName || mentionProfile.username).charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-white truncate">{member?.user.displayName || mentionProfile.username}</div>
-                <div className="text-xs text-gray-400 truncate">@{mentionProfile.username}</div>
+          <div ref={mentionProfileRef} className="fixed z-50 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 overflow-hidden w-72 animate-scaleIn"
+            style={{ left: Math.min(pos.x, window.innerWidth - 300), top: Math.max(10, pos.y - 10), transform: 'translateY(-100%)' }}>
+            <div className="h-16 bg-gradient-to-r from-primary-600 to-primary-800" />
+            <div className="px-4 -mt-8">
+              <div className="w-16 h-16 rounded-full bg-primary-600 flex items-center justify-center text-white text-2xl font-bold overflow-hidden ring-4 ring-dark-300">
+                {avatar ? <img src={avatar} alt="" className="w-full h-full object-cover" /> : displayName.charAt(0).toUpperCase()}
               </div>
             </div>
-            {!member && <div className="text-xs text-gray-500">User not in this channel</div>}
+            <div className="p-4">
+              <h4 className="text-white font-bold text-lg">{displayName}</h4>
+              <p className="text-gray-400 text-sm mb-3">@{username}</p>
+              <div className="border-t border-dark-100 pt-3 space-y-2">
+                {member?.joinedAt && (
+                  <div>
+                    <div className="text-xs font-semibold text-gray-400 uppercase">Member Since</div>
+                    <div className="text-sm text-gray-200">{format(new Date(member.joinedAt), 'MMM d, yyyy')}</div>
+                  </div>
+                )}
+                {member?.roles && member.roles.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-gray-400 uppercase mb-1">Roles</div>
+                    <div className="flex flex-wrap gap-1">
+                      {member.roles.map((r: any) => (
+                        <span key={r.role.id} className="px-2 py-0.5 rounded-full text-xs font-medium border" style={{ borderColor: r.role.color, color: r.role.color }}>
+                          {r.role.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {!member && <div className="text-xs text-gray-500 mt-1">User not in this server</div>}
+            </div>
           </div>
         )
       })()}
 
       <div className="flex items-start space-x-3">
-        <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
+        <div onClick={(e) => { setAuthorProfile({ x: e.clientX, y: e.clientY }); setMentionProfile(null) }}
+          className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity">
           {message.author.avatar ? (
             <img src={message.author.avatar} alt={message.author.displayName} className="w-10 h-10 rounded-full object-cover" />
           ) : (
@@ -473,7 +508,8 @@ const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMem
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline space-x-2">
-            <span className="font-medium text-white hover:underline cursor-pointer">{message.author.displayName}</span>
+            <span onClick={(e) => { setAuthorProfile({ x: e.clientX, y: e.clientY }); setMentionProfile(null) }}
+              className="font-medium text-white hover:underline cursor-pointer">{message.author.displayName}</span>
             <span className="text-xs text-gray-500">
               {format(new Date(message.createdAt), 'MMM d, yyyy h:mm a')}
               {message.editedAt && <span className="text-gray-600 ml-1">(edited)</span>}

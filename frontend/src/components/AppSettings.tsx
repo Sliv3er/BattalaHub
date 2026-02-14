@@ -153,6 +153,8 @@ const AudioTab = () => {
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 256
       src.connect(analyser)
+      // Loopback: play mic audio through speakers so user can hear themselves
+      src.connect(ctx.destination)
       const data = new Uint8Array(analyser.frequencyBinCount)
       const poll = () => {
         analyser.getByteFrequencyData(data)

@@ -51,11 +51,15 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const emojiRef = useRef<HTMLDivElement>(null)
   const mentionRef = useRef<HTMLDivElement>(null)
-  const { socket, sendMessage, editMessage, deleteMessage, joinChannel, leaveChannel } = useSocketStore()
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isTypingRef = useRef(false)
+  const { socket, sendMessage, editMessage, deleteMessage, joinChannel, leaveChannel, startTyping, stopTyping } = useSocketStore()
   const { user } = useAuthStore()
 
   useEffect(() => {
     if (channelId) {
+      setTypingUsers([])
       fetchMessages()
       fetchChannelInfo()
       joinChannel(channelId)
@@ -92,7 +96,18 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
       socket.on('new_message', handleNew)
       socket.on('message_updated', (message: Message) => setMessages(prev => prev.map(m => m.id === message.id ? message : m)))
       socket.on('message_deleted', (data: { messageId: string }) => setMessages(prev => prev.filter(m => m.id !== data.messageId)))
-      return () => { socket.off('new_message', handleNew); socket.off('message_updated'); socket.off('message_deleted') }
+      
+      // Typing indicators
+      socket.on('user_typing', (data: { userId: string; username: string; displayName?: string }) => {
+        if (data.userId !== user?.id) {
+          setTypingUsers(prev => prev.includes(data.displayName || data.username) ? prev : [...prev, data.displayName || data.username])
+        }
+      })
+      socket.on('user_stopped_typing', (data: { userId: string; username: string; displayName?: string }) => {
+        setTypingUsers(prev => prev.filter(u => u !== (data.displayName || data.username)))
+      })
+
+      return () => { socket.off('new_message', handleNew); socket.off('message_updated'); socket.off('message_deleted'); socket.off('user_typing'); socket.off('user_stopped_typing') }
     }
   }, [socket, user?.id])
 
@@ -128,6 +143,11 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !channelId) return
+    if (isTypingRef.current) {
+      isTypingRef.current = false
+      stopTyping(channelId)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    }
     sendMessage(channelId, newMessage.trim())
     setNewMessage('')
   }
@@ -184,6 +204,23 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setNewMessage(val)
+
+    // Typing indicator
+    if (channelId && val.length > 0) {
+      if (!isTypingRef.current) {
+        isTypingRef.current = true
+        startTyping(channelId)
+      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => {
+        isTypingRef.current = false
+        if (channelId) stopTyping(channelId)
+      }, 3000)
+    } else if (channelId && val.length === 0 && isTypingRef.current) {
+      isTypingRef.current = false
+      stopTyping(channelId)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    }
     const lastAt = val.lastIndexOf('@')
     if (lastAt !== -1 && (lastAt === 0 || val[lastAt - 1] === ' ')) {
       const query = val.slice(lastAt + 1)
@@ -296,6 +333,26 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
                 <span className="text-xs text-gray-500">@{m.user.username}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Typing Indicator */}
+      {typingUsers.length > 0 && (
+        <div className="px-4 pb-1 flex-shrink-0">
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className="flex gap-0.5">
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+            <span>
+              {typingUsers.length === 1
+                ? `${typingUsers[0]} is typing...`
+                : typingUsers.length === 2
+                ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+                : `${typingUsers[0]} and ${typingUsers.length - 1} others are typing...`}
+            </span>
           </div>
         </div>
       )}

@@ -76,6 +76,12 @@ export const playJoinSound = () => playTone([[400, 0.07], [600, 0.07], [800, 0.0
 export const playLeaveSound = () => playTone([[600, 0.07], [400, 0.07], [300, 0.06]], 0.2, 0.25)
 export const playDisconnectSound = () => playTone([[300, 0.1], [200, 0.15]], 0.25, 0.3)
 export const playScreenShareSound = () => playTone([[500, 0.05], [700, 0.05], [900, 0.05], [1100, 0.05]], 0.2, 0.2)
+export const playMuteSound = () => playTone([[400, 0.06], [300, 0.06]], 0.15, 0.15)
+export const playUnmuteSound = () => playTone([[300, 0.06], [400, 0.06]], 0.15, 0.15)
+export const playDeafenSound = () => playTone([[500, 0.06], [350, 0.06], [250, 0.06]], 0.15, 0.18)
+export const playUndeafenSound = () => playTone([[250, 0.06], [350, 0.06], [500, 0.06]], 0.15, 0.18)
+export const playStreamStopSound = () => playTone([[800, 0.06], [500, 0.06], [300, 0.08]], 0.15, 0.2)
+export const playStreamWatchSound = () => playTone([[600, 0.05], [800, 0.05], [1000, 0.05]], 0.12, 0.15)
 export const playNotificationSound = () => playTone([[880, 0.06], [1100, 0.06]], 0.12, 0.2)
 
 let iceServers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -101,7 +107,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   remoteStreams: new Map<string, MediaStream>(),
   watchingUserId: null,
 
-  setWatchingUser: (userId: string | null) => set({ watchingUserId: userId }),
+  setWatchingUser: (userId: string | null) => {
+    if (userId) playStreamWatchSound(); else playStreamStopSound()
+    set({ watchingUserId: userId })
+  },
 
   setStreamQuality: (fps: number, height: number) => {
     set({ streamQuality: { fps, height } })
@@ -312,6 +321,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       localStream.getAudioTracks().forEach(t => { t.enabled = isMuted })
     }
     const newMuted = !isMuted
+    if (newMuted) playMuteSound(); else playUnmuteSound()
     set({ isMuted: newMuted })
     if (voiceSocket && currentChannelId) {
       voiceSocket.emit('voice_state_update', { channelId: currentChannelId, isMuted: newMuted, isDeafened, isScreenSharing })
@@ -326,6 +336,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       })
     })
     const newDeafened = !isDeafened
+    if (newDeafened) playDeafenSound(); else playUndeafenSound()
     set({ isDeafened: newDeafened })
     if (voiceSocket && currentChannelId) {
       voiceSocket.emit('voice_state_update', { channelId: currentChannelId, isMuted, isDeafened: newDeafened, isScreenSharing })
@@ -336,6 +347,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     const { isScreenSharing, peerConnections, screenStream, voiceSocket, currentChannelId, isMuted, isDeafened } = get()
     if (isScreenSharing) {
       screenStream?.getTracks().forEach(t => t.stop())
+      playStreamStopSound()
       set({ isScreenSharing: false, screenStream: null })
       if (voiceSocket && currentChannelId) {
         voiceSocket.emit('voice_state_update', { channelId: currentChannelId, isMuted, isDeafened, isScreenSharing: false })

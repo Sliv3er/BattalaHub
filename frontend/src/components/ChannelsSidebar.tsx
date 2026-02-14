@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { HashtagIcon, SpeakerWaveIcon, PlusIcon, XMarkIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { HashtagIcon, SpeakerWaveIcon, PlusIcon, XMarkIcon, Cog6ToothIcon, ArrowRightOnRectangleIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { MicrophoneIcon as MicSolid, SpeakerXMarkIcon as SpeakerSolid, PhoneXMarkIcon } from '@heroicons/react/24/solid'
 import { clsx } from 'clsx'
 import client from '../api/client'
 import { useAuthStore } from '../stores/authStore'
@@ -43,9 +44,11 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
   const [editModal, setEditModal] = useState<Channel | null>(null)
   const [editName, setEditName] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Channel | null>(null)
+  const [sidebarVoicePopover, setSidebarVoicePopover] = useState<{ userId: string; displayName: string; x: number; y: number } | null>(null)
   const contextRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const { user, logout } = useAuthStore()
-  const { currentChannelId, connectedUsers, isSpeaking, speakingUsers } = useVoiceStore()
+  const { currentChannelId, connectedUsers, isSpeaking, speakingUsers, isMuted, isDeafened, pingMs, connectionQuality, userVolumes } = useVoiceStore()
 
   useEffect(() => {
     if (serverId) fetchChannels()
@@ -56,7 +59,6 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
     const voiceChannels = channels.filter(c => c.type === 'VOICE')
     voiceChannels.forEach(ch => {
       client.get(`/voice/channels/${ch.id}/users`).then(r => {
-        // API returns { user: { id, displayName, avatar, ... } } — flatten it
         const users = r.data.map((s: any) => s.user || s)
         setVoiceUsers(prev => ({ ...prev, [ch.id]: users }))
       }).catch(() => {})
@@ -71,6 +73,15 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
     if (contextMenu) document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [contextMenu])
+
+  // Close voice popover on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setSidebarVoicePopover(null)
+    }
+    if (sidebarVoicePopover) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [sidebarVoicePopover])
 
   const fetchChannels = async () => {
     if (!serverId) return
@@ -140,6 +151,9 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
     }
   }
 
+  // Get current voice channel name
+  const currentVoiceChannelName = channels.find(c => c.id === currentChannelId)?.name || ''
+
   if (!serverId) {
     return (
       <div className="sidebar h-full bg-dark-200">
@@ -151,7 +165,7 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
   const isOwner = user?.id === serverOwnerId
 
   return (
-    <div className="sidebar h-full bg-dark-200">
+    <div className="sidebar h-full bg-dark-200 flex flex-col">
       {/* Server Header */}
       <div className="p-4 border-b border-dark-100 flex items-center justify-between group">
         <h2 className="font-bold text-white truncate flex-1">{serverName}</h2>
@@ -176,8 +190,12 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
             <button key={channel.id}
               onClick={() => onSelectChannel(channel.id, 'TEXT', channel.name)}
               onContextMenu={e => handleContextMenu(e, channel)}
-              className={clsx('channel-item', selectedChannelId === channel.id && 'active')}>
-              <HashtagIcon className="w-5 h-5 mr-2" /><span>{channel.name}</span>
+              className={clsx('channel-item group', selectedChannelId === channel.id && 'active')}>
+              <HashtagIcon className="w-5 h-5 mr-2" /><span className="truncate">{channel.name}</span>
+              <div className="ml-auto hidden group-hover:flex items-center gap-1">
+                <PencilIcon className="w-3.5 h-3.5 text-gray-400 hover:text-white" onClick={(e) => { e.stopPropagation(); setEditName(channel.name); setEditModal(channel) }} />
+                <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(channel) }} />
+              </div>
             </button>
           ))}
 
@@ -188,7 +206,6 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
             </button>
           </div>
           {channels.filter(c => c.type === 'VOICE').map(channel => {
-            // Merge current user into voice users list if they're in this channel
             const fetchedUsers = voiceUsers[channel.id] || []
             const channelVoiceUsers = currentChannelId === channel.id && user && !fetchedUsers.some(u => u.id === user.id)
               ? [...fetchedUsers, { id: user.id, displayName: user.displayName, avatar: user.avatar }]
@@ -198,14 +215,20 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
               <button
                 onClick={() => { onSelectChannel(channel.id, 'VOICE', channel.name); useVoiceStore.getState().joinVoice(channel.id) }}
                 onContextMenu={e => handleContextMenu(e, channel)}
-                className={clsx('channel-item', selectedChannelId === channel.id && 'active')}>
-                <SpeakerWaveIcon className="w-5 h-5 mr-2" /><span>{channel.name}</span>
+                className={clsx('channel-item group', selectedChannelId === channel.id && 'active')}>
+                <SpeakerWaveIcon className="w-5 h-5 mr-2" /><span className="truncate">{channel.name}</span>
+                <div className="ml-auto hidden group-hover:flex items-center gap-1">
+                  <PencilIcon className="w-3.5 h-3.5 text-gray-400 hover:text-white" onClick={(e) => { e.stopPropagation(); setEditName(channel.name); setEditModal(channel) }} />
+                  <TrashIcon className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(channel) }} />
+                </div>
               </button>
               {/* Voice users under channel */}
               {channelVoiceUsers.map(vu => {
                 const isUserSpeaking = speakingUsers.has(vu.id) || (vu.id === user?.id && isSpeaking)
                 return (
-                  <div key={vu.id} className="flex items-center gap-2 pl-9 py-1 text-xs text-gray-400">
+                  <div key={vu.id}
+                    onClick={(e) => setSidebarVoicePopover({ userId: vu.id, displayName: vu.displayName, x: e.clientX, y: e.clientY })}
+                    className="flex items-center gap-2 pl-9 py-1 text-xs text-gray-400 cursor-pointer hover:bg-dark-100/50 rounded">
                     <div className={clsx(
                       'w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold overflow-hidden flex-shrink-0 transition-all duration-150',
                       isUserSpeaking ? 'ring-2 ring-green-500 bg-green-600' : 'bg-primary-600'
@@ -214,8 +237,8 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
                     </div>
                     <span className={clsx('truncate', isUserSpeaking && 'text-green-400')}>{vu.displayName}</span>
                     {vu.isScreenSharing && <span className="text-[9px] font-bold text-green-400 bg-green-400/10 px-1 rounded">LIVE</span>}
-                    {vu.isMuted && <span className="text-red-400 text-[10px]">🔇</span>}
-                    {vu.isDeafened && <span className="text-red-400 text-[10px]">🔈</span>}
+                    {vu.isMuted && <MicSolid className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
+                    {vu.isDeafened && <SpeakerSolid className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
                   </div>
                 )
               })}
@@ -224,6 +247,36 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
           })}
         </div>
       </div>
+
+      {/* Voice Connection Info Panel */}
+      {currentChannelId && (
+        <div className="px-3 py-2 border-t border-dark-100 bg-dark-300/80">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <div className={clsx('w-2 h-2 rounded-full', connectionQuality === 'good' ? 'bg-green-500' : connectionQuality === 'medium' ? 'bg-yellow-500' : 'bg-red-500')} />
+                <span className={clsx('text-xs font-semibold', connectionQuality === 'good' ? 'text-green-400' : connectionQuality === 'medium' ? 'text-yellow-400' : 'text-red-400')}>
+                  Voice Connected
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-0.5">
+                {pingMs != null ? `${pingMs}ms` : '...'} • {currentVoiceChannelName}
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => useVoiceStore.getState().toggleMute()} className={clsx('p-1 rounded', isMuted ? 'text-red-400' : 'text-gray-400 hover:text-white')}>
+                <MicSolid className="w-4 h-4" />
+              </button>
+              <button onClick={() => useVoiceStore.getState().toggleDeafen()} className={clsx('p-1 rounded', isDeafened ? 'text-red-400' : 'text-gray-400 hover:text-white')}>
+                <SpeakerSolid className="w-4 h-4" />
+              </button>
+              <button onClick={() => useVoiceStore.getState().leaveVoice()} className="p-1 rounded text-gray-400 hover:text-red-400">
+                <PhoneXMarkIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User Area */}
       <div className="p-3 border-t border-dark-100 bg-dark-300/50">
@@ -256,6 +309,18 @@ const ChannelsSidebar = ({ serverId, selectedChannelId, onSelectChannel }: Chann
             className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-dark-200 hover:text-white">Edit Channel</button>
           <button onClick={() => { setDeleteConfirm(contextMenu.channel); setContextMenu(null) }}
             className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-dark-200 hover:text-red-300">Delete Channel</button>
+        </div>
+      )}
+
+      {/* Voice User Popover */}
+      {sidebarVoicePopover && (
+        <div ref={popoverRef} className="fixed bg-dark-300 rounded-lg shadow-2xl border border-dark-100 p-3 z-50 animate-scaleIn w-52"
+          style={{ left: sidebarVoicePopover.x, top: sidebarVoicePopover.y - 80 }}>
+          <div className="text-sm text-white font-medium mb-2">{sidebarVoicePopover.displayName}</div>
+          <label className="text-xs text-gray-400 mb-1 block">Volume: {Math.round((userVolumes[sidebarVoicePopover.userId] ?? 1) * 100)}%</label>
+          <input type="range" min="0" max="200" value={Math.round((userVolumes[sidebarVoicePopover.userId] ?? 1) * 100)}
+            onChange={(e) => useVoiceStore.getState().setUserVolume(sidebarVoicePopover.userId, parseInt(e.target.value) / 100)}
+            className="w-full accent-primary-500" />
         </div>
       )}
 

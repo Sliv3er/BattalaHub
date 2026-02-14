@@ -26,16 +26,31 @@ interface MembersListProps {
   myRoles?: any[]
 }
 
+interface ServerRole {
+  id: string
+  name: string
+  color: string
+  permissions: string[]
+}
+
 const MembersList = ({ channelId, serverId, myRoles = [] }: MembersListProps) => {
   const [members, setMembers] = useState<Member[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [popoverPos, setPopoverPos] = useState({ top: 0 })
   const popoverRef = useRef<HTMLDivElement>(null)
+  const [serverRoles, setServerRoles] = useState<ServerRole[]>([])
+  const [roleLoading, setRoleLoading] = useState<string | null>(null)
 
   useEffect(() => {
     if (channelId) fetchMembers()
   }, [channelId])
+
+  useEffect(() => {
+    if (serverId) {
+      client.get(`/roles/${serverId}`).then(r => setServerRoles(r.data)).catch(() => {})
+    }
+  }, [serverId])
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -65,6 +80,40 @@ const MembersList = ({ channelId, serverId, myRoles = [] }: MembersListProps) =>
     setPopoverPos({ top: rect.top })
     setSelectedMember(member)
   }
+
+  const canManageRoles = hasPermission(myRoles, 'MANAGE_ROLES')
+
+  const toggleRole = async (member: Member, roleId: string) => {
+    const hasRole = member.roles?.some(r => r.role.id === roleId)
+    setRoleLoading(roleId)
+    try {
+      if (hasRole) {
+        await client.delete(`/roles/${roleId}/assign/${member.id}`)
+      } else {
+        await client.post(`/roles/${roleId}/assign/${member.id}`)
+      }
+      // Refresh members to get updated roles
+      await fetchMembers()
+      // Update selected member
+      setSelectedMember(prev => {
+        if (!prev) return null
+        const updated = members.find(m => m.id === prev.id)
+        return updated || prev
+      })
+    } catch (err) {
+      toast.error('Failed to update role')
+    } finally {
+      setRoleLoading(null)
+    }
+  }
+
+  // Re-sync selectedMember when members change
+  useEffect(() => {
+    if (selectedMember) {
+      const updated = members.find(m => m.id === selectedMember.id)
+      if (updated) setSelectedMember(updated)
+    }
+  }, [members])
 
   const onlineMembers = members.filter(m => m.user.isOnline)
   const offlineMembers = members.filter(m => !m.user.isOnline)
@@ -146,6 +195,27 @@ const MembersList = ({ channelId, serverId, myRoles = [] }: MembersListProps) =>
                 </div>
               )}
             </div>
+            {/* Manage Roles */}
+            {canManageRoles && serverRoles.length > 0 && (
+              <div className="border-t border-dark-100 pt-3 mt-2">
+                <div className="text-xs font-semibold text-gray-400 uppercase mb-2">Manage Roles</div>
+                <div className="space-y-1 max-h-32 overflow-y-auto scrollbar-thin">
+                  {serverRoles.map(role => {
+                    const hasRole = selectedMember.roles?.some(r => r.role.id === role.id)
+                    return (
+                      <label key={role.id} className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-dark-100/50 cursor-pointer transition-colors">
+                        <input type="checkbox" checked={!!hasRole} disabled={roleLoading === role.id}
+                          onChange={() => toggleRole(selectedMember, role.id)}
+                          className="w-3.5 h-3.5 rounded accent-primary-500" />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: role.color }} />
+                        <span className="text-sm text-gray-200 truncate">{role.name}</span>
+                        {roleLoading === role.id && <span className="text-xs text-gray-500 ml-auto">...</span>}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {/* Moderation Actions */}
             {serverId && (hasPermission(myRoles, 'MUTE_MEMBERS') || hasPermission(myRoles, 'DEAFEN_MEMBERS') || hasPermission(myRoles, 'KICK_MEMBERS')) && (
               <div className="border-t border-dark-100 pt-3 mt-2">

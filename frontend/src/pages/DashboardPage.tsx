@@ -37,7 +37,7 @@ const DashboardPage = () => {
         )}
       </div>
       <div className="w-60 flex-shrink-0">
-        <MembersList channelId={selectedChannelId} />
+        <MembersList channelId={selectedChannelId} serverId={selectedServerId ?? undefined} />
       </div>
     </div>
   )

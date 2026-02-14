@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { PaperAirplaneIcon, PaperClipIcon, FaceSmileIcon, HashtagIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { clsx } from 'clsx'
 import client from '../api/client'
 import { useSocketStore } from '../stores/socketStore'
 import { useAuthStore } from '../stores/authStore'
@@ -42,9 +43,14 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
   const [emojis, setEmojis] = useState<Emoji[]>([])
   const [emojiError, setEmojiError] = useState(false)
   const [previewFile, setPreviewFile] = useState<{ file: File; url: string } | null>(null)
+  const [showMentions, setShowMentions] = useState(false)
+  const [mentionFilter, setMentionFilter] = useState('')
+  const [channelMembers, setChannelMembers] = useState<{ id: string; user: { id: string; username: string; displayName: string; avatar?: string } }[]>([])
+  const [mentionIndex, setMentionIndex] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const emojiRef = useRef<HTMLDivElement>(null)
+  const mentionRef = useRef<HTMLDivElement>(null)
   const { socket, sendMessage, editMessage, deleteMessage, joinChannel, leaveChannel } = useSocketStore()
   const { user } = useAuthStore()
 
@@ -53,6 +59,7 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
       fetchMessages()
       fetchChannelInfo()
       joinChannel(channelId)
+      client.get(`/channels/${channelId}/members`).then(r => setChannelMembers(r.data)).catch(() => {})
       return () => { leaveChannel(channelId) }
     }
   }, [channelId])
@@ -69,9 +76,12 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
     if (socket) {
       const handleNew = (message: Message) => {
         setMessages(prev => [...prev, message])
-        // Play notification sound if enabled and not from current user
-        if (message.author.id !== user?.id && useSettingsStore.getState().notificationSounds) {
-          playNotificationSound()
+        if (message.author.id !== user?.id) {
+          const isMentioned = user?.username && message.content.includes(`@${user.username}`)
+          // Always play sound on mention, otherwise respect settings
+          if (isMentioned || useSettingsStore.getState().notificationSounds) {
+            playNotificationSound()
+          }
         }
       }
       socket.on('new_message', handleNew)
@@ -166,6 +176,41 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
     setShowEmojiPicker(false)
   }
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setNewMessage(val)
+    const lastAt = val.lastIndexOf('@')
+    if (lastAt !== -1 && (lastAt === 0 || val[lastAt - 1] === ' ')) {
+      const query = val.slice(lastAt + 1)
+      if (!query.includes(' ')) {
+        setMentionFilter(query.toLowerCase())
+        setMentionIndex(0)
+        setShowMentions(true)
+        return
+      }
+    }
+    setShowMentions(false)
+  }
+
+  const filteredMembers = channelMembers.filter(m =>
+    m.user.username.toLowerCase().includes(mentionFilter) ||
+    m.user.displayName.toLowerCase().includes(mentionFilter)
+  ).slice(0, 8)
+
+  const insertMention = (username: string) => {
+    const lastAt = newMessage.lastIndexOf('@')
+    setNewMessage(newMessage.slice(0, lastAt) + '@' + username + ' ')
+    setShowMentions(false)
+  }
+
+  const handleMentionKey = (e: React.KeyboardEvent) => {
+    if (!showMentions || filteredMembers.length === 0) return
+    if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(i => (i + 1) % filteredMembers.length) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(i => (i - 1 + filteredMembers.length) % filteredMembers.length) }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMembers[mentionIndex].user.username) }
+    else if (e.key === 'Escape') { setShowMentions(false) }
+  }
+
   if (!channelId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-dark-400">
@@ -205,6 +250,8 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
             {messages.map((message) => (
               <MessageItem key={message.id} message={message} serverEmojis={emojis}
                 isOwn={message.author.id === user?.id}
+                currentUsername={user?.username}
+                channelMembers={channelMembers}
                 onEdit={(content) => editMessage(message.id, content)}
                 onDelete={() => deleteMessage(message.id)} />
             ))}
@@ -228,6 +275,26 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
         </div>
       )}
 
+      {/* Mention Autocomplete */}
+      {showMentions && filteredMembers.length > 0 && (
+        <div ref={mentionRef} className="mx-4 mb-1 bg-dark-300 rounded-xl shadow-2xl border border-dark-100 overflow-hidden animate-scaleIn">
+          <div className="text-xs font-semibold text-gray-400 uppercase px-3 pt-2 pb-1">Members</div>
+          <div className="max-h-48 overflow-y-auto scrollbar-thin">
+            {filteredMembers.map((m, i) => (
+              <div key={m.id} onClick={() => insertMention(m.user.username)}
+                className={clsx('flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors',
+                  i === mentionIndex ? 'bg-primary-600/30' : 'hover:bg-dark-200')}>
+                <div className="w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center text-white text-xs font-bold overflow-hidden flex-shrink-0">
+                  {m.user.avatar ? <img src={m.user.avatar} className="w-6 h-6 rounded-full object-cover" /> : m.user.displayName.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm text-white">{m.user.displayName}</span>
+                <span className="text-xs text-gray-500">@{m.user.username}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Message Input */}
       <div className="p-4 flex-shrink-0">
         <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-dark-200 rounded-xl px-4 py-2 border border-dark-100 focus-within:border-primary-500/50 transition-colors">
@@ -236,7 +303,7 @@ const ChatArea = ({ channelId, serverId }: ChatAreaProps) => {
             className="p-1.5 text-gray-400 hover:text-white transition-colors disabled:opacity-50 rounded-lg hover:bg-dark-100" title="Attach file">
             <PaperClipIcon className="w-5 h-5" />
           </button>
-          <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)}
+          <input type="text" value={newMessage} onChange={handleInputChange} onKeyDown={handleMentionKey}
             placeholder={isUploading ? 'Uploading file...' : 'Type a message...'}
             className="flex-1 bg-transparent text-white placeholder-gray-400 outline-none text-sm" maxLength={2000} disabled={isUploading} />
           
@@ -281,11 +348,13 @@ interface MessageItemProps {
   message: Message
   serverEmojis: Emoji[]
   isOwn: boolean
+  currentUsername?: string
+  channelMembers?: { id: string; user: { username: string } }[]
   onEdit: (content: string) => void
   onDelete: () => void
 }
 
-const MessageItem = ({ message, serverEmojis, isOwn, onEdit, onDelete }: MessageItemProps) => {
+const MessageItem = ({ message, serverEmojis, isOwn, currentUsername, channelMembers = [], onEdit, onDelete }: MessageItemProps) => {
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -309,6 +378,21 @@ const MessageItem = ({ message, serverEmojis, isOwn, onEdit, onDelete }: Message
     setShowDeleteConfirm(false)
   }
 
+  const renderMentions = (text: string, keyPrefix: string) => {
+    const parts = text.split(/(@\w+)/g)
+    return parts.map((part, i) => {
+      if (part.startsWith('@')) {
+        const username = part.slice(1)
+        const isSelf = username === currentUsername
+        return <span key={`${keyPrefix}-m${i}`} className={clsx('px-1 rounded font-medium',
+          isSelf ? 'bg-yellow-500/30 text-yellow-300' : 'bg-primary-500/30 text-primary-300 hover:underline cursor-pointer')}>
+          {part}
+        </span>
+      }
+      return <span key={`${keyPrefix}-m${i}`}>{part}</span>
+    })
+  }
+
   const renderContent = (content: string) => {
     if (isImage || isFileUrl) return null
     const parts = content.split(/:([a-zA-Z0-9_]+):/g)
@@ -317,7 +401,7 @@ const MessageItem = ({ message, serverEmojis, isOwn, onEdit, onDelete }: Message
         const emoji = serverEmojis.find(e => e.name === part)
         if (emoji) return <img key={i} src={emoji.url} alt={`:${part}:`} className="inline-block w-8 h-8 align-middle" />
       }
-      return <span key={i}>{part}</span>
+      return <span key={i}>{renderMentions(part, `${i}`)}</span>
     })
   }
 

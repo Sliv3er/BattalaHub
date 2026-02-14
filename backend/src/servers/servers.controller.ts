@@ -81,6 +81,13 @@ export class ServersController {
     return this.serversService.leaveServer(serverId, req.user.id);
   }
 
+  @Get(':id/invites')
+  @ApiOperation({ summary: 'Get server invites' })
+  @ApiResponse({ status: 200, description: 'Invites retrieved successfully' })
+  getInvites(@Param('id') serverId: string, @Request() req) {
+    return this.serversService.getInvites(serverId, req.user.id);
+  }
+
   @Post(':id/invites')
   @ApiOperation({ summary: 'Create an invite for the server' })
   @ApiResponse({ status: 201, description: 'Invite created successfully' })

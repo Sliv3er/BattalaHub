@@ -251,6 +251,18 @@ export class ServersService {
     });
   }
 
+  async getInvites(serverId: string, userId: string) {
+    const member = await this.prisma.serverMember.findUnique({
+      where: { userId_serverId: { userId, serverId } },
+    });
+    if (!member) throw new ForbiddenException('You are not a member of this server');
+    return this.prisma.invite.findMany({
+      where: { serverId },
+      include: { creator: { select: { id: true, username: true, displayName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async createInvite(serverId: string, createInviteDto: CreateInviteDto, userId: string) {
     const member = await this.prisma.serverMember.findUnique({
       where: {
